@@ -307,16 +307,21 @@ impl qobject::PhoneCall {
         self.as_mut().set_ringing(is_ringing);
         self.as_mut().set_active(call.is_some());
 
-        let hfp = calls::hfp_status(call_device);
+        let here = call_device.is_some_and(|d| crate::call_audio::phase().device() == Some(d));
+        let link_audio = app.is_empty() && call_device.is_some_and(crate::call_audio::supported);
+        let hfp = if cfg!(target_os = "linux") && (here || link_audio) {
+            Default::default()
+        } else {
+            calls::hfp_status(call_device)
+        };
         self.as_mut().set_hfp_available(hfp.available);
         self.as_mut().set_hfp_connected(hfp.connected);
         self.as_mut().set_hfp_detail(QString::from(&hfp.detail));
 
-        let here = call_device.is_some_and(|d| crate::call_audio::phase().device() == Some(d));
         self.as_mut().set_call_audio(here);
         // An app call's sound stays on the phone (#434).
         self.as_mut().set_call_audio_available(
-            !is_ringing && app.is_empty() && (here || call_device.is_some_and(crate::call_audio::available)),
+            !is_ringing && call.is_some() && app.is_empty() && (here || link_audio),
         );
 
         let view = calls::view();

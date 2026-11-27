@@ -11,7 +11,7 @@ The **Calls** page on your PC lets you see incoming phone calls with caller ID, 
 | Requirement | Details |
 | :--- | :--- |
 | **Android Permissions** | **Calls on your PC** (`READ_PHONE_STATE`, `READ_CALL_LOG`, `ANSWER_PHONE_CALLS`, `CALL_PHONE`) and **Contacts on your PC** (`READ_CONTACTS`) in **Settings › Permissions › Calls, contacts and messages**. |
-| **Android Power Level** | `Standard` for incoming call alerts, caller ID, answer, decline, hang up, call log, dialer, and volume control. `Elevated` (on Android 12+) enables in-call **Mute**, **Speakerphone**, **Hold**, and **Keypad (DTMF)** controls from the PC, and (on Android 13+, Windows) talking through your PC. |
+| **Android Power Level** | `Standard` for incoming call alerts, caller ID, answer, decline, hang up, call log, dialer, and volume control. `Elevated` (on Android 12+) enables in-call **Mute**, **Speakerphone**, **Hold**, and **Keypad (DTMF)** controls from the PC. On compatible phones running Android 13 or newer, it also lets you talk through a Windows or Linux PC. |
 | **Per-Device Toggles** | **Calls** and **Contacts** (both enabled by default in **Settings › Devices** on the PC). |
 | **Network** | Local network, USB cable, or **Connect over mobile data**. |
 
@@ -47,19 +47,21 @@ While a call is active on your phone, the call bar on your PC shows the live cal
 
 The **Calls** page groups your phone's recent incoming, outgoing, and missed calls by day. Missed calls are highlighted in red and summarized on your PC's Home screen until viewed. The **Calls** item in the left rail shows a badge with the number of missed calls you haven't looked at, and it goes away when you open the page. A voicemail notification from your phone appears in the notification feed like any other notification.
 
-### Talking Through Your PC (Windows)
+<a id="talking-through-your-pc-windows"></a>
+
+### Talking Through Your PC
 
 With `Elevated` on Android 13 or newer, the call in progress can move to your PC: click **On PC** on the call card or in Nectar Island. You hear the other person from your PC's speakers or headphones and talk into its microphone, over NectarLink's own encrypted connection, without Bluetooth. Your phone shows a notification that the call's sound is on your PC; tap **Back to phone** there, or click **On PC** again on the PC, to move it back. A call you answer or dial from the PC moves there on its own. When the call ends, everything goes back on its own.
 
 Use headphones if you can: on speakers, your PC's microphone also picks up the other person.
 
-Calls use Windows' default communications microphone. To pick another one, go to **Settings › Camera & Audio › Microphone for calls**; a change applies to a call that's already on the PC too.
+Calls use the default communications microphone on Windows and the default audio input on Linux. Pick another input under **Settings › Camera & Audio › Microphone for calls**. Changes also apply during a call.
 
 If Windows' default communications microphone is off or missing, NectarLink uses the default microphone instead. If NectarLink says Windows keeps it off the microphone, turn on **Settings › Privacy & security › Microphone › Let desktop apps access your microphone** in Windows.
 
 Whether your phone allows this is up to its maker: the phone's audio system must let apps reach the call (Android calls this call audio interception). It works on Google Pixel phones. NectarLink checks this when Elevated starts; on a phone that doesn't allow it, the PC shows no **On PC** button. Details are in [`docs/research/hfp.md`](../research/hfp.md).
 
-On Linux, call audio goes to the PC over Bluetooth instead, as for a headset.
+On Linux, microphone capture uses the PulseAudio tools (`pactl` and `parec`) or the PipeWire tools (`wpctl` and `pw-record`). Bluetooth hands-free remains available when the phone does not support call audio over the encrypted connection.
 
 ## What the Options Do
 
@@ -75,6 +77,6 @@ On Linux, call audio goes to the PC over Bluetooth instead, as for a headset.
 
 ## Limits
 
-- **Talking through your PC**: Needs `Elevated` on Android 13 or newer, and a phone whose audio system lets apps reach the call (Pixel phones do; others may not). On Windows only, for now. There's no echo cancelling yet, so headphones work best.
+- **Talking through your PC**: Needs Windows or Linux, `Elevated` on Android 13 or newer, and a phone whose audio system lets apps reach the call (Pixel phones do; others may not). There's no echo cancelling yet, so headphones work best.
 - **In-Call Mute, Hold, Speaker, and DTMF Keypad**: Standard Android permissions allow third-party apps to answer and end calls (`TelecomManager`), but muting the microphone, toggling speakerphone, holding a call, and sending DTMF tones during a cellular call require `Elevated` on Android 12 or newer unless the app replaces your default phone dialer.
 - **Dual-SIM Selection**: When you place a call from the PC on a dual-SIM phone, Android uses the default calling SIM configured in your phone's SIM settings (or prompts on the phone if your SIM preference is set to "Ask every time").

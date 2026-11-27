@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! A phone call's sound on this PC (docs/protocol/calls.md §2.6): the other
 //! party plays from the speakers and the PC's microphone goes into the call,
-//! while the phone shows that its call sounds here. Windows only for now;
-//! Linux carries calls over Bluetooth (`linux::bt_hfp`).
+//! while the phone shows that its call sounds here.
 
 use std::sync::{Arc, Mutex};
 
@@ -39,7 +38,7 @@ impl Phase {
 struct State {
     phase: Phase,
     /// The PC's microphone, going into the call.
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     recorder: Option<crate::win::audio_in::Recorder>,
     uplink: Option<Arc<nectarlink_core::MirrorStream>>,
 }
@@ -54,14 +53,18 @@ pub fn phase() -> Phase {
     state(|s| s.phase)
 }
 
-/// Whether this PC can take `device`'s call in progress.
-pub fn available(device: DeviceId) -> bool {
-    cfg!(windows)
-        && crate::calls::active(device).is_some()
+/// Whether this PC can carry calls from this phone over the paired connection.
+pub fn supported(device: DeviceId) -> bool {
+    cfg!(any(windows, target_os = "linux"))
         && core_host::host().hub.read(|s| {
             s.matrices.get(&device).and_then(|m| m.state("calls.audio"))
                 == Some(nectarlink_core::FeatureState::Available)
         })
+}
+
+/// Whether this PC can take `device`'s call in progress.
+pub fn available(device: DeviceId) -> bool {
+    supported(device) && crate::calls::active(device).is_some()
 }
 
 /// Moves `device`'s call in progress here.
@@ -119,17 +122,17 @@ pub fn start(device: DeviceId) {
     });
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 use crate::win::audio_in::MicError;
 
-/// Why the microphone can't be recorded, off Windows.
-#[cfg(not(windows))]
+/// Why the microphone can't be recorded on an unsupported platform.
+#[cfg(not(any(windows, target_os = "linux")))]
 #[derive(Debug)]
 pub enum MicError {
     Other(String),
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 impl std::fmt::Display for MicError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let MicError::Other(e) = self;
@@ -145,7 +148,7 @@ fn mic_message(e: &MicError) -> String {
             "Calls",
             "Windows keeps NectarLink off the microphone. Turn on Settings › Privacy & security › Microphone › Let desktop apps access your microphone, then try again."
         ),
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "linux"))]
         MicError::Missing => tr!("Calls", "No microphone on this PC to talk with."),
         MicError::Other(_) => tr!(
             "Calls",
@@ -154,12 +157,12 @@ fn mic_message(e: &MicError) -> String {
     }
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 fn record_into(uplink: &Arc<nectarlink_core::MirrorStream>, device: DeviceId) -> Result<(), MicError> {
     let rate = nectarlink_core::CALLS_AUDIO_RATE;
     let config = MirrorAudioConfig { codec: nectarlink_core::MIRROR_PCM.into(), rate, channels: 1 };
     uplink.send(nectarlink_core::PacketKind::Config, 0, config.to_cbor());
-    let recorder = recorder(uplink)?;
+    let recorder = recorder(uplink, chosen_mic())?;
     state(|s| {
         if s.phase == Phase::Starting(device) {
             s.recorder = Some(recorder);
@@ -169,12 +172,15 @@ fn record_into(uplink: &Arc<nectarlink_core::MirrorStream>, device: DeviceId) ->
 }
 
 /// Records the chosen microphone into `uplink`. Blocks a moment.
-#[cfg(windows)]
-fn recorder(uplink: &Arc<nectarlink_core::MirrorStream>) -> Result<crate::win::audio_in::Recorder, MicError> {
+#[cfg(any(windows, target_os = "linux"))]
+fn recorder(
+    uplink: &Arc<nectarlink_core::MirrorStream>,
+    mic: Option<String>,
+) -> Result<crate::win::audio_in::Recorder, MicError> {
     let rate = nectarlink_core::CALLS_AUDIO_RATE;
     let stream = uplink.clone();
     let mut samples = 0u64;
-    crate::win::audio_in::Recorder::start(chosen_mic(), rate, move |pcm| {
+    crate::win::audio_in::Recorder::start(mic, rate, move |pcm| {
         let time_us = samples * 1_000_000 / u64::from(rate);
         samples += pcm.len() as u64 / 2;
         stream.send(nectarlink_core::PacketKind::Frame, time_us, pcm);
@@ -193,14 +199,16 @@ pub fn chosen_mic() -> Option<String> {
 }
 
 /// The PC's microphones, and the one calls record: the chosen one while
-/// it's there, else Windows' default communications microphone.
+/// it's there, otherwise the platform default.
 pub fn mics() -> (Vec<nectarlink_core::AudioOutputDevice>, Option<String>) {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     let devices = crate::win::audio::input_devices();
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "linux")))]
     let devices: Vec<nectarlink_core::AudioOutputDevice> = Vec::new();
     let chosen = chosen_mic().filter(|id| devices.iter().any(|d| &d.id == id));
     let current = chosen.or_else(|| devices.iter().find(|d| d.is_default).map(|d| d.id.clone()));
+    #[cfg(target_os = "linux")]
+    let current = current.or_else(|| devices.first().map(|d| d.id.clone()));
     (devices, current)
 }
 
@@ -221,32 +229,41 @@ pub fn set_mic(id: String) {
     }
     #[cfg(windows)]
     switch_mic();
+    #[cfg(target_os = "linux")]
+    core_host::spawn(async {
+        let _ = tokio::task::spawn_blocking(switch_mic).await;
+    });
     core_host::host().hub.changed(Changes::CALLS);
 }
 
 /// A call sounding here moves to the microphone just chosen.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 fn switch_mic() {
+    let selected = chosen_mic();
     let (old, uplink) = state(|s| match s.phase {
         Phase::Live(_) => (s.recorder.take(), s.uplink.clone()),
         _ => (None, None),
     });
     let Some(uplink) = uplink else { return };
     drop(old);
-    match recorder(&uplink) {
+    match recorder(&uplink, selected.clone()) {
         Ok(recorder) => state(|s| {
-            if matches!(s.phase, Phase::Live(_)) && s.recorder.is_none() {
+            if s.uplink.as_ref().is_some_and(|current| Arc::ptr_eq(current, &uplink))
+                && s.recorder.is_none()
+                && chosen_mic() == selected
+            {
                 s.recorder = Some(recorder);
             }
         }),
-        Err(e) => {
+        Err(e) if chosen_mic() == selected => {
             tracing::warn!(error = %e, "can't record the chosen microphone");
             show_message(mic_message(&e));
         }
+        Err(_) => {}
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 fn record_into(_uplink: &Arc<nectarlink_core::MirrorStream>, _device: DeviceId) -> Result<(), MicError> {
     Err(MicError::Other("not on this system".into()))
 }
@@ -272,9 +289,9 @@ pub fn end(device: DeviceId) -> bool {
             return false;
         }
         s.phase = Phase::Off;
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "linux"))]
         let recorder = s.recorder.take();
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, target_os = "linux")))]
         let recorder = ();
         (recorder, s.uplink.take())
     };
