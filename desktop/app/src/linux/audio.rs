@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Linux speaker volume, mute, output device enumeration, microphone mute
+//! Linux speaker volume, mute, audio device enumeration, microphone mute
 //! state, and event-driven change notifications via PipeWire (`wpctl`) and
 //! PulseAudio (`pactl`).
 
@@ -52,27 +52,27 @@ pub(crate) fn parse_pactl_volume_and_mute(vol_out: &str, mute_out: Option<&str>)
     Some((pct, muted))
 }
 
-/// Parses `pactl list sinks` output along with `pactl get-default-sink` into
+/// Parses `pactl list sinks` or `pactl list sources` with the default into
 /// sorted `AudioOutputDevice` entries (default first, then alphabetical by name).
-pub(crate) fn parse_pactl_sinks(list_out: &str, default_sink: Option<&str>) -> Vec<AudioOutputDevice> {
-    let default_trimmed = default_sink.map(str::trim).filter(|s| !s.is_empty());
+fn parse_pactl_devices(list_out: &str, default: Option<&str>, input: bool) -> Vec<AudioOutputDevice> {
+    let default = default.map(str::trim).filter(|s| !s.is_empty());
+    let header = if input { "Source #" } else { "Sink #" };
     let mut out = Vec::new();
     let mut current_id: Option<String> = None;
     let mut current_desc: Option<String> = None;
 
     let flush = |id: &mut Option<String>, desc: &mut Option<String>, out: &mut Vec<AudioOutputDevice>| {
-        if let Some(sink_id) = id.take() {
-            let name = desc.take().filter(|d| !d.is_empty()).unwrap_or_else(|| sink_id.clone());
-            let is_default = default_trimmed == Some(sink_id.as_str());
-            out.push(AudioOutputDevice { id: sink_id, name, is_default });
-        } else {
-            *desc = None;
+        let desc = desc.take();
+        if let Some(id) = id.take().filter(|name| !input || !name.ends_with(".monitor")) {
+            let name = desc.filter(|d| !d.is_empty()).unwrap_or_else(|| id.clone());
+            let is_default = default == Some(id.as_str());
+            out.push(AudioOutputDevice { id, name, is_default });
         }
     };
 
     for raw_line in list_out.lines() {
         let line = raw_line.trim();
-        if line.starts_with("Sink #") {
+        if line.starts_with(header) {
             flush(&mut current_id, &mut current_desc, &mut out);
         } else if let Some(rest) = line.strip_prefix("Name:") {
             let id = rest.trim();
@@ -92,11 +92,11 @@ pub(crate) fn parse_pactl_sinks(list_out: &str, default_sink: Option<&str>) -> V
     out
 }
 
-/// Parses the `Sinks:` section of `wpctl status` into sorted `AudioOutputDevice`
+/// Parses an audio endpoint section of `wpctl status` into sorted `AudioOutputDevice`
 /// entries (default first, then alphabetical by name).
-pub(crate) fn parse_wpctl_status_sinks(status_out: &str) -> Vec<AudioOutputDevice> {
+fn parse_wpctl_devices(status_out: &str, section: &str) -> Vec<AudioOutputDevice> {
     let mut out = Vec::new();
-    let mut in_sinks = false;
+    let mut in_section = false;
 
     for raw_line in status_out.lines() {
         let stripped = raw_line
@@ -107,11 +107,11 @@ pub(crate) fn parse_wpctl_status_sinks(status_out: &str) -> Vec<AudioOutputDevic
         if stripped.is_empty() {
             continue;
         }
-        if stripped == "Sinks:" {
-            in_sinks = true;
+        if stripped == section {
+            in_section = true;
             continue;
         }
-        if !in_sinks {
+        if !in_section {
             continue;
         }
         let has_tree_indent =
@@ -160,13 +160,13 @@ pub(crate) fn resolve_wpctl_sink_node_id(
     if trimmed.chars().all(|c| c.is_ascii_digit()) {
         return Some(trimmed.to_owned());
     }
-    for sink in parse_wpctl_status_sinks(status_out) {
+    for sink in parse_wpctl_devices(status_out, "Sinks:") {
         if sink.id == trimmed || sink.name.eq_ignore_ascii_case(trimmed) {
             return Some(sink.id);
         }
     }
     if let Some(name_out) = status_name_out {
-        for sink in parse_wpctl_status_sinks(name_out) {
+        for sink in parse_wpctl_devices(name_out, "Sinks:") {
             if sink.id == trimmed || sink.name.eq_ignore_ascii_case(trimmed) {
                 return Some(sink.id);
             }
@@ -311,7 +311,7 @@ pub fn output_devices() -> Vec<AudioOutputDevice> {
     if let Some(wpctl_out) = super::run_cmd_timeout("wpctl", &["status"], CMD_TIMEOUT)
         && wpctl_out.status.success()
     {
-        let parsed = parse_wpctl_status_sinks(&String::from_utf8_lossy(&wpctl_out.stdout));
+        let parsed = parse_wpctl_devices(&String::from_utf8_lossy(&wpctl_out.stdout), "Sinks:");
         if !parsed.is_empty() {
             return parsed;
         }
@@ -325,13 +325,50 @@ pub fn output_devices() -> Vec<AudioOutputDevice> {
     if let Some(list_out) = super::run_cmd_timeout("pactl", &["list", "sinks"], CMD_TIMEOUT)
         && list_out.status.success()
     {
-        let parsed = parse_pactl_sinks(&String::from_utf8_lossy(&list_out.stdout), default_sink.as_deref());
+        let parsed =
+            parse_pactl_devices(&String::from_utf8_lossy(&list_out.stdout), default_sink.as_deref(), false);
         if !parsed.is_empty() {
             return parsed;
         }
     }
 
     Vec::new()
+}
+
+/// Lists microphones by source name, excluding speaker monitors.
+pub fn input_devices() -> Vec<AudioOutputDevice> {
+    if let Some(list) = super::run_cmd_timeout("pactl", &["list", "sources"], CMD_TIMEOUT)
+        && list.status.success()
+    {
+        let default = super::run_cmd_timeout("pactl", &["get-default-source"], CMD_TIMEOUT)
+            .filter(|out| out.status.success())
+            .map(|out| String::from_utf8_lossy(&out.stdout).into_owned());
+        return parse_pactl_devices(&String::from_utf8_lossy(&list.stdout), default.as_deref(), true);
+    }
+
+    let Some(status) =
+        super::run_cmd_timeout("wpctl", &["status"], CMD_TIMEOUT).filter(|out| out.status.success())
+    else {
+        return Vec::new();
+    };
+    let Some(names) = super::run_cmd_timeout("wpctl", &["status", "--name"], CMD_TIMEOUT)
+        .filter(|out| out.status.success())
+    else {
+        return Vec::new();
+    };
+    let descriptions = parse_wpctl_devices(&String::from_utf8_lossy(&status.stdout), "Sources:");
+    parse_wpctl_devices(&String::from_utf8_lossy(&names.stdout), "Sources:")
+        .into_iter()
+        .filter(|node| !node.name.ends_with(".monitor"))
+        .map(|node| AudioOutputDevice {
+            name: descriptions
+                .iter()
+                .find(|d| d.id == node.id)
+                .map_or_else(|| node.name.clone(), |d| d.name.clone()),
+            id: node.name,
+            is_default: node.is_default,
+        })
+        .collect()
 }
 
 /// Switches the system default output sink to `id`.
@@ -448,7 +485,7 @@ Sink #52
 \tName: bluez_output.AA_BB_CC_DD_EE_FF.1
 \tDescription: Pixel Buds Pro
 ";
-        let devices = parse_pactl_sinks(sample, Some("bluez_output.AA_BB_CC_DD_EE_FF.1"));
+        let devices = parse_pactl_devices(sample, Some("bluez_output.AA_BB_CC_DD_EE_FF.1"), false);
         assert_eq!(devices.len(), 2);
         assert_eq!(devices[0].id, "bluez_output.AA_BB_CC_DD_EE_FF.1");
         assert_eq!(devices[0].name, "Pixel Buds Pro");
@@ -456,6 +493,26 @@ Sink #52
         assert_eq!(devices[1].id, "alsa_output.pci-0000_00_1f.3.analog-stereo");
         assert_eq!(devices[1].name, "Built-in Audio Analog Stereo");
         assert!(!devices[1].is_default);
+    }
+
+    #[test]
+    fn pulse_input_devices_exclude_speaker_monitors() {
+        let sample = "\
+Source #41
+\tName: alsa_output.speakers.monitor
+\tDescription: Monitor of Built-in Audio
+Source #42
+\tName: alsa_input.usb_headset
+\tDescription: USB headset
+Source #43
+\tName: alsa_input.internal_mic
+\tDescription: Built-in microphone
+";
+        let microphones = parse_pactl_devices(sample, Some("alsa_input.usb_headset"), true);
+        assert_eq!(microphones.len(), 2);
+        assert_eq!(microphones[0].id, "alsa_input.usb_headset");
+        assert!(microphones[0].is_default);
+        assert_eq!(microphones[1].id, "alsa_input.internal_mic");
     }
 
     #[test]
@@ -483,7 +540,7 @@ Audio
  │  *   58. bluez_output.AA_BB_CC_DD_EE_FF.1    [vol: 0.80 MUTED]
  ├─ Sources:
 ";
-        let devices = parse_wpctl_status_sinks(status);
+        let devices = parse_wpctl_devices(status, "Sinks:");
         assert_eq!(devices.len(), 2);
         assert_eq!(devices[0].id, "58");
         assert_eq!(devices[0].name, "Pixel Buds Pro");

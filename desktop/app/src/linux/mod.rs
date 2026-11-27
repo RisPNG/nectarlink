@@ -5,6 +5,7 @@
 #![allow(dead_code, unsafe_code)]
 
 pub mod audio;
+pub mod audio_in;
 pub mod audio_out;
 pub mod autostart;
 pub mod ble_beacon;

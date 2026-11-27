@@ -17,19 +17,19 @@ use crate::{
     state::Changes,
 };
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 use crate::win::audio_in::{MicError, Recorder};
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 type Recorder = ();
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 #[derive(Debug)]
 enum MicError {
     Other(String),
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 impl std::fmt::Display for MicError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let MicError::Other(e) = self;
@@ -109,7 +109,7 @@ pub fn device() -> Option<DeviceId> {
 
 /// Whether this PC can carry calls from this phone over the paired connection.
 pub fn supported(device: DeviceId) -> bool {
-    cfg!(windows)
+    cfg!(any(windows, target_os = "linux"))
         && core_host::node()
             .and_then(|n| n.capabilities(device).ok())
             .is_some_and(|matrix| matrix.state("calls.audio") == Some(FeatureState::Available))
@@ -222,7 +222,7 @@ fn mic_message(e: &MicError) -> String {
             "Calls",
             "Windows keeps NectarLink off the microphone. Turn on Settings › Privacy & security › Microphone › Let desktop apps access your microphone, then try again."
         ),
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "linux"))]
         MicError::Missing => tr!("Calls", "No microphone on this PC to talk with."),
         MicError::Other(_) => tr!(
             "Calls",
@@ -232,7 +232,7 @@ fn mic_message(e: &MicError) -> String {
 }
 
 /// Records the chosen microphone into `uplink`. Blocks until capture starts.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 fn recorder(uplink: &Arc<MirrorStream>) -> Result<Recorder, MicError> {
     let rate = nectarlink_core::CALLS_AUDIO_RATE;
     let stream = uplink.clone();
@@ -244,7 +244,7 @@ fn recorder(uplink: &Arc<MirrorStream>) -> Result<Recorder, MicError> {
     })
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 fn recorder(_uplink: &Arc<MirrorStream>) -> Result<Recorder, MicError> {
     Err(MicError::Other("not on this system".into()))
 }
@@ -263,12 +263,14 @@ pub fn chosen_mic() -> Option<String> {
 /// The PC's microphones, and the one calls record: the chosen one while
 /// it's there, else the platform default.
 pub fn mics() -> (Vec<nectarlink_core::AudioOutputDevice>, Option<String>) {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     let devices = crate::win::audio::input_devices();
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "linux")))]
     let devices: Vec<nectarlink_core::AudioOutputDevice> = Vec::new();
     let chosen = chosen_mic().filter(|id| devices.iter().any(|d| &d.id == id));
     let current = chosen.or_else(|| devices.iter().find(|d| d.is_default).map(|d| d.id.clone()));
+    #[cfg(target_os = "linux")]
+    let current = current.or_else(|| devices.first().map(|d| d.id.clone()));
     (devices, current)
 }
 
@@ -285,7 +287,7 @@ pub fn set_mic(id: String) {
     if let Err(e) = crate::settings::Settings::update(dir, |settings| settings.call_mic = Some(id)) {
         tracing::warn!(error = %e, "can't save the call microphone");
     }
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     core_host::spawn(async {
         let _ = tokio::task::spawn_blocking(switch_mic).await;
     });
@@ -293,7 +295,7 @@ pub fn set_mic(id: String) {
 }
 
 /// A call sounding here moves to the microphone just chosen.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 fn switch_mic() {
     let Some((route, old, uplink)) = state(|s| Some((s.route?, s.recorder.take()?, s.uplink.clone()?)))
     else {
@@ -372,15 +374,15 @@ pub fn sink(peer: &DeviceId) -> Option<Arc<dyn MicSink>> {
 
 struct Sink {
     route: Route,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     player: Mutex<Option<crate::win::audio_out::Player>>,
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "linux")))]
     player: Mutex<Option<()>>,
 }
 
 impl MicSink for Sink {
     fn config(&self, config: MirrorAudioConfig) {
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "linux"))]
         if state(|s| s.route == Some(self.route)) {
             match crate::win::audio_out::Player::start(config.rate, u16::from(config.channels)) {
                 Ok(player) => *self.player.lock().unwrap_or_else(|e| e.into_inner()) = Some(player),
@@ -392,19 +394,19 @@ impl MicSink for Sink {
                 }
             }
         }
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, target_os = "linux")))]
         let _ = config;
     }
 
     fn audio(&self, _time_us: u64, mut data: Vec<u8>) {
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "linux"))]
         if state(|s| s.route == Some(self.route))
             && let Some(player) = self.player.lock().unwrap_or_else(|e| e.into_inner()).as_ref()
         {
             crate::phone_sound::apply_volume(&mut data);
             player.push(data);
         }
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, target_os = "linux")))]
         let _ = &mut data;
     }
 

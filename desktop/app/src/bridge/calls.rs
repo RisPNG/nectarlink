@@ -308,7 +308,7 @@ impl qobject::PhoneCall {
         self.as_mut().set_active(call.is_some());
 
         let lan_audio = call_device.is_some_and(crate::call_audio::supported);
-        let hfp = calls::hfp_status(call_device);
+        let hfp = if lan_audio { Default::default() } else { calls::hfp_status(call_device) };
         self.as_mut().set_hfp_available(hfp.available);
         self.as_mut().set_hfp_connected(hfp.connected);
         self.as_mut().set_hfp_detail(QString::from(&hfp.detail));

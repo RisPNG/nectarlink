@@ -106,7 +106,7 @@ fn clear_current(session: Session, phase: Option<Phase>, next: Option<Phase>) ->
         &mut ACTIVE.lock().unwrap_or_else(|e| e.into_inner()),
         session,
         phase,
-        next.filter(|phase| *phase == Phase::Reconnecting || cfg!(windows)),
+        next.filter(|phase| *phase == Phase::Reconnecting || cfg!(any(windows, target_os = "linux"))),
     )?;
     changed();
     Some(current)
