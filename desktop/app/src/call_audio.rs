@@ -319,13 +319,14 @@ impl MicSink for Sink {
         let _ = config;
     }
 
-    fn audio(&self, _time_us: u64, data: Vec<u8>) {
+    fn audio(&self, _time_us: u64, mut data: Vec<u8>) {
         #[cfg(any(windows, target_os = "linux"))]
         if let Some(player) = self.player.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            crate::phone_sound::apply_volume(&mut data);
             player.push(data);
         }
         #[cfg(not(any(windows, target_os = "linux")))]
-        let _ = data;
+        let _ = &mut data;
     }
 
     /// The phone stopped sending: the call ended or it took the sound back.

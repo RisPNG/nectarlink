@@ -48,11 +48,16 @@ internal object CallAudio {
             if (!interceptable(audio)) return refuse(out, "this phone doesn't let apps reach a call's sound")
             track = runCatching(::uplinkTrack).getOrElse { return refuse(out, "can't play into the call: $it") }
             record = runCatching(::downlinkRecord).getOrElse { return refuse(out, "can't hear the call: $it") }
+            runCatching {
+                track.play()
+                record.startRecording()
+                check(track.playState == AudioTrack.PLAYSTATE_PLAYING)
+                check(record.recordingState == AudioRecord.RECORDSTATE_RECORDING)
+            }.getOrElse { return refuse(out, "can't start the call audio: $it") }
             out.write("OK\n".toByteArray())
             out.flush()
 
             val playing = track
-            playing.play()
             thread(isDaemon = true, name = "call-uplink") {
                 val chunk = ByteArray(CHUNK_BYTES)
                 runCatching {
@@ -81,12 +86,11 @@ internal object CallAudio {
                 runCatching { client.shutdownOutput() }
             }
 
-            record.startRecording()
             val chunk = ByteArray(CHUNK_BYTES)
             var chunks = 0
             while (true) {
                 val n = record.read(chunk, 0, chunk.size)
-                if (n < 0) break
+                if (n <= 0) break
                 out.write(chunk, 0, n)
                 out.flush()
                 if (++chunks % MODE_CHECK_CHUNKS == 0 && mode() != MODE_IN_CALL) break

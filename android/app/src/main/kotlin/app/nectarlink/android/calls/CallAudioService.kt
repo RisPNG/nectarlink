@@ -23,6 +23,8 @@ import app.nectarlink.android.elevated.ElevatedCallAudioStream
 import app.nectarlink.core.MirrorSendResult
 import app.nectarlink.core.VideoPacketKind
 import app.nectarlink.core.mirrorAudioConfig
+import java.io.DataInputStream
+import java.io.EOFException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -71,7 +73,7 @@ class CallAudioService : Service() {
         scope.launch {
             try {
                 val stream = core().callAudioOpen(call.pcId) ?: run {
-                    core().callAudioStop(call.pcId)
+                    if (synchronized(lock) { active === call }) core().callAudioStop(call.pcId)
                     return@launch
                 }
                 try {
@@ -80,17 +82,18 @@ class CallAudioService : Service() {
                     ) {
                         return@launch
                     }
-                    // The PC plays the call now; the phone's copy goes quiet (#133).
-                    CallEarpiece.quiet(this@CallAudioService)
-                    val input = call.socket.inputStream
+                    val input = DataInputStream(call.socket.inputStream)
                     val chunk = ByteArray(CallAudio.CHUNK_BYTES)
                     var samples = 0L
                     while (true) {
-                        val read = input.read(chunk)
-                        if (read <= 0) break
+                        try {
+                            input.readFully(chunk)
+                        } catch (_: EOFException) {
+                            break
+                        }
                         val timeUs = samples * 1_000_000L / CallAudio.RATE
-                        samples += read / 2
-                        if (stream.send(VideoPacketKind.FRAME, timeUs.toULong(), chunk.copyOf(read)) ==
+                        samples += chunk.size / 2
+                        if (stream.send(VideoPacketKind.FRAME, timeUs.toULong(), chunk) ==
                             MirrorSendResult.CLOSED
                         ) {
                             break
@@ -104,7 +107,7 @@ class CallAudioService : Service() {
                 if (synchronized(lock) { active === call }) core().callAudioStop(call.pcId)
             } catch (e: Exception) {
                 Log.w(TAG, "call sound failed", e)
-                core().callAudioStop(call.pcId)
+                if (synchronized(lock) { active === call }) core().callAudioStop(call.pcId)
             } finally {
                 end(call)
             }
@@ -119,7 +122,6 @@ class CallAudioService : Service() {
         }
         call?.let { runCatching { it.socket.close() } }
         if (last) {
-            CallEarpiece.end(this)
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
             stopSelf()
         }
@@ -178,11 +180,16 @@ class CallAudioService : Service() {
          */
         fun start(context: Context, pcId: String): Boolean {
             val socket = Elevated.openCallAudio() ?: return false
-            val previous = synchronized(lock) { active.also { active = Active(pcId, socket) } }
+            val call = Active(pcId, socket)
+            val previous = synchronized(lock) { active.also { active = call } }
             previous?.let { runCatching { it.socket.close() } }
             val intent = Intent(context, CallAudioService::class.java).setAction(ACTION_START).putExtra(EXTRA_PC, pcId)
             return runCatching { ContextCompat.startForegroundService(context, intent) }
-                .onFailure { Log.w(TAG, "can't start the call sound service", it) }
+                .onFailure {
+                    synchronized(lock) { if (active === call) active = null }
+                    runCatching { socket.close() }
+                    Log.w(TAG, "can't start the call sound service", it)
+                }
                 .isSuccess
         }
 
