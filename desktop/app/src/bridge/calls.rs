@@ -307,17 +307,17 @@ impl qobject::PhoneCall {
         self.as_mut().set_ringing(is_ringing);
         self.as_mut().set_active(call.is_some());
 
+        let lan_audio = call_device.is_some_and(crate::call_audio::supported);
         let hfp = calls::hfp_status(call_device);
         self.as_mut().set_hfp_available(hfp.available);
         self.as_mut().set_hfp_connected(hfp.connected);
         self.as_mut().set_hfp_detail(QString::from(&hfp.detail));
 
-        let here = call_device.is_some_and(|d| crate::call_audio::phase().device() == Some(d));
+        let here = call_device.is_some_and(|d| crate::call_audio::device() == Some(d));
         self.as_mut().set_call_audio(here);
         // An app call's sound stays on the phone (#434).
-        self.as_mut().set_call_audio_available(
-            !is_ringing && app.is_empty() && (here || call_device.is_some_and(crate::call_audio::available)),
-        );
+        self.as_mut()
+            .set_call_audio_available(!is_ringing && call.is_some() && app.is_empty() && (here || lan_audio));
 
         let view = calls::view();
         if self.rust().last_view.as_ref() != Some(&view) {
@@ -397,7 +397,7 @@ impl qobject::PhoneCall {
     pub fn move_call_audio(&self, here: bool) {
         let Some((device, _)) = self.rust().call.clone() else { return };
         if here {
-            crate::call_audio::start(device);
+            crate::call_audio::start(device, false);
         } else {
             crate::call_audio::stop(device);
         }

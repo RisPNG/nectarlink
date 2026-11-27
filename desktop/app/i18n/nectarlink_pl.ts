@@ -1204,6 +1204,11 @@
         <source>The PC&apos;s microphone couldn&apos;t be started. Pick another one in Settings › Camera &amp; Audio › Microphone for calls, or try again.</source>
         <translation>Nie udało się uruchomić mikrofonu komputera. Wybierz inny w Ustawienia › Kamera i dźwięk › Mikrofon telefonu do rozmów albo spróbuj ponownie.</translation>
     </message>
+    <message>
+        <location filename="rust_strings.h" line="65"/>
+        <source>The PC couldn&apos;t play the call.</source>
+        <translation>Nie udało się odtworzyć dźwięku połączenia na komputerze.</translation>
+    </message>
 </context>
 <context>
     <name>CallsPage</name>
@@ -6409,6 +6414,11 @@ Wymagania
         <location filename="../qml/pages/HomePage.qml" line="1"/>
         <source>Bluetooth: notifications, texts and calls</source>
         <translation>Bluetooth: powiadomienia, SMS-y i połączenia</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/HomePage.qml" line="2110"/>
+        <source>Ready to play calls</source>
+        <translation>Gotowe do odtwarzania dźwięku połączeń</translation>
     </message>
 </context>
 <context>
