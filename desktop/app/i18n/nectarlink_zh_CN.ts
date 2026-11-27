@@ -1204,6 +1204,11 @@
         <source>The PC&apos;s microphone couldn&apos;t be started. Pick another one in Settings › Camera &amp; Audio › Microphone for calls, or try again.</source>
         <translation>无法启动电脑的麦克风。请在 设置 › 摄像头与音频 › 通话麦克风 中选择其他麦克风，或再试一次。</translation>
     </message>
+    <message>
+        <location filename="rust_strings.h" line="65"/>
+        <source>The PC couldn&apos;t play the call.</source>
+        <translation>电脑无法播放通话音频。</translation>
+    </message>
 </context>
 <context>
     <name>CallsPage</name>
@@ -6136,6 +6141,11 @@ What it needs
         <location filename="../qml/pages/HomePage.qml" line="1"/>
         <source>Bluetooth: notifications, texts and calls</source>
         <translation>蓝牙：通知、短信和通话</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/HomePage.qml" line="2110"/>
+        <source>Ready to play calls</source>
+        <translation>已准备好播放通话音频</translation>
     </message>
 </context>
 <context>

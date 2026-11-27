@@ -218,7 +218,7 @@ impl Platform for DesktopPlatform {
         call_audio::sink(peer)
     }
     fn call_audio_stop_requested(&self, peer: &nectarlink_core::DeviceId) {
-        call_audio::end(*peer);
+        call_audio::end(*peer, call_audio::Departure::ReturnedToPhone);
     }
     fn mirror_volume_changed(&self, peer: &nectarlink_core::DeviceId, level: u8) {
         phone_sound::volume_from_phone(*peer, level);

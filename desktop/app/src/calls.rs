@@ -187,7 +187,8 @@ pub fn on_event(event: &NodeEvent) {
         }
         // A phone that's gone can't be answered (or hung up) from here.
         NodeEvent::LinkChanged { device, link: LinkState::Offline { .. } } => {
-            stop_ringing(*device);
+            stop_ringing(*device, None);
+            crate::call_audio::end(*device, crate::call_audio::Departure::Disconnected);
             finish(*device);
             note_call_ended(*device);
             if Some(*device) == page_device {
@@ -207,7 +208,8 @@ pub fn on_event(event: &NodeEvent) {
             }
         }
         NodeEvent::DeviceRemoved(device) => {
-            stop_ringing(*device);
+            stop_ringing(*device, None);
+            crate::call_audio::end(*device, crate::call_audio::Departure::Finished);
             finish(*device);
             note_call_ended(*device);
             forget_page_data(*device);
@@ -220,6 +222,11 @@ pub fn on_event(event: &NodeEvent) {
                 && notified(|n| n.get(&matrix.device) != Some(&call.id))
             {
                 show_in_progress(matrix.device, &call);
+            }
+            if matrix.state("calls.audio") == Some(FeatureState::Available)
+                && crate::phone_sound::routes_calls(matrix.device)
+            {
+                crate::call_audio::start(matrix.device, true);
             }
             if Some(matrix.device) == page_device {
                 if matrix.state("calls.log") == Some(FeatureState::Available)
@@ -239,10 +246,8 @@ pub fn on_event(event: &NodeEvent) {
 }
 
 fn changed(device: DeviceId, call: &CallState) {
-    match call.state.as_str() {
-        "ringing" | "active" => note_call_ongoing(device),
-        "ended" => note_call_ended(device),
-        _ => {}
+    if matches!(call.state.as_str(), "ringing" | "active") {
+        note_call_ongoing(device);
     }
     if call.state == "active" {
         let mut call = call.clone();
@@ -253,6 +258,7 @@ fn changed(device: DeviceId, call: &CallState) {
             Some(previous) if previous.id == call.id => {}
             previous => {
                 if let Some(previous) = previous {
+                    crate::call_audio::stop(device);
                     toast::remove(TOAST_GROUP, &format!("{ACTIVE}{}", key(device, &previous.id)));
                 }
                 if can_control_call(device, call) {
@@ -273,11 +279,12 @@ fn changed(device: DeviceId, call: &CallState) {
                 .unwrap_or_else(|e| e.into_inner())
                 .take_if(|(d, at)| *d == device && at.elapsed() < DIALED_HERE_FOR)
                 .is_some();
-        if answered_here || dialed_here {
-            crate::call_audio::start(device);
+        if answered_here || dialed_here || crate::phone_sound::routes_calls(device) {
+            crate::call_audio::start(device, true);
         }
         core_host::host().hub.changed(Changes::CALLS);
-    } else if call.state == "ended" || in_progress(|c| c.get(&device).is_some_and(|c| c.id == call.id)) {
+    } else if in_progress(|c| c.get(&device).is_some_and(|c| c.id == call.id)) {
+        crate::call_audio::end(device, crate::call_audio::Departure::Finished);
         finish(device);
     }
     match call.state.as_str() {
@@ -290,13 +297,19 @@ fn changed(device: DeviceId, call: &CallState) {
             show_ringing(device, call, false);
             core_host::host().hub.changed(Changes::CALLS);
         }
-        "ended" if call.missed => {
-            stop_ringing(device);
-            show_missed(device, call);
-            crate::badges::missed_call(device);
+        "ended" => {
+            stop_ringing(device, Some(&call.id));
+            if call.missed {
+                show_missed(device, call);
+                crate::badges::missed_call(device);
+            }
+            if !in_progress(|c| c.contains_key(&device)) && !ringing(|r| r.contains_key(&device)) {
+                note_call_ended(device);
+            }
         }
-        // Answered (here or on the phone) or over.
-        _ => stop_ringing(device),
+        // Answered here or on the phone.
+        "active" => stop_ringing(device, Some(&call.id)),
+        _ => {}
     }
 }
 
@@ -323,7 +336,6 @@ fn now_ms() -> i64 {
 
 /// The call in progress is over (or out of reach).
 fn finish(device: DeviceId) {
-    crate::call_audio::end(device);
     notified(|n| n.remove(&device));
     if let Some(call) = in_progress(|c| c.remove(&device)) {
         toast::remove(TOAST_GROUP, &format!("{ACTIVE}{}", key(device, &call.id)));
@@ -331,8 +343,14 @@ fn finish(device: DeviceId) {
     }
 }
 
-fn stop_ringing(device: DeviceId) {
-    if let Some(call) = ringing(|r| r.remove(&device)) {
+fn stop_ringing(device: DeviceId, id: Option<&str>) {
+    let removed = ringing(|r| {
+        if id.is_some_and(|id| r.get(&device).is_none_or(|call| call.id != id)) {
+            return None;
+        }
+        r.remove(&device)
+    });
+    if let Some(call) = removed {
         toast::remove(TOAST_GROUP, &key(device, &call.id));
         core_host::host().hub.changed(Changes::CALLS);
     }
@@ -1226,6 +1244,23 @@ mod tests {
         assert_eq!(caller(&call(Some("Sam"), Some("+1555"))), "Sam");
         assert_eq!(caller(&call(Some(" "), Some("+1555"))), "+1555");
         assert_eq!(caller(&call(None, None)), "Unknown caller");
+    }
+
+    #[test]
+    fn a_late_end_leaves_other_calls_and_media_pause_in_place() {
+        let device = DeviceId([253; 32]);
+        let active_call = CallState { id: "active".into(), state: "active".into(), ..call(None, None) };
+        let ringing_call = CallState { id: "ringing".into(), ..call(None, None) };
+        let ended_call = CallState { id: "old".into(), state: "ended".into(), ..call(None, None) };
+        in_progress(|calls| calls.insert(device, active_call.clone()));
+        ringing(|calls| calls.insert(device, ringing_call.clone()));
+        ongoing_calls(|phones| phones.insert(device));
+
+        changed(device, &ended_call);
+
+        assert_eq!(in_progress(|calls| calls.remove(&device)), Some(active_call));
+        assert_eq!(ringing(|calls| calls.remove(&device)), Some(ringing_call));
+        assert!(ongoing_calls(|phones| phones.remove(&device)));
     }
 
     #[test]

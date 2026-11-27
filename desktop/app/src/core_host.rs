@@ -489,6 +489,7 @@ fn dispatch(host: &CoreHost, event: &nectarlink_core::NodeEvent) {
     crate::photos::on_event(event);
     crate::photo_backup::on_event(event);
     crate::continuity_camera::on_event(event);
+    crate::phone_sound::on_event(event);
     crate::calls::on_event(event);
     crate::messages::on_event(event);
     crate::badges::on_event(event);

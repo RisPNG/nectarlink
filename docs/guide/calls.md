@@ -50,7 +50,7 @@ The **Calls** page groups your phone's recent incoming, outgoing, and missed cal
 
 ### Talking Through Your PC (Windows)
 
-With `Elevated` on Android 13 or newer, the call in progress can move to your PC: click **On PC** on the call card or in Nectar Island. You hear the other person from your PC's speakers or headphones and talk into its microphone, over NectarLink's own encrypted connection, without Bluetooth. Your phone shows a notification that the call's sound is on your PC; tap **Back to phone** there, or click **On PC** again on the PC, to move it back. A call you answer or dial from the PC moves there on its own. When the call ends, everything goes back on its own.
+With `Elevated` on Android 13 or newer, the call in progress can move to your PC: click **On PC** on the call card or in Nectar Island. You hear the other person from your PC's speakers or headphones and talk into its microphone, over NectarLink's own encrypted connection, without Bluetooth. Your phone shows a notification that the call's sound is on your PC; tap **Back to phone** there, or click **On PC** again on the PC, to move it back. A call you answer or dial from the PC moves there on its own. Turn on **Phone sound on this PC** to route calls you answer or dial on the phone too. If the connection drops, a call routed to the PC returns there when you reconnect. The call stays on the phone if you moved it there yourself. When the call ends, everything goes back on its own.
 
 Use headphones if you can: on speakers, your PC's microphone also picks up the other person.
 

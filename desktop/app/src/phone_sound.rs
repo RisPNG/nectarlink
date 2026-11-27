@@ -7,14 +7,14 @@
 use std::{
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicU64, Ordering},
     },
     time::Duration,
 };
 
 use nectarlink_core::{
     DeviceId, Error, FeatureState, LinkState, MIRROR_SCREEN, MirrorAudioConfig, MirrorConfig, MirrorSink,
-    MirrorStart,
+    MirrorStart, NodeEvent,
 };
 
 use crate::{
@@ -34,6 +34,12 @@ enum Phase {
     Asking,
     /// Its sound is playing here.
     Playing,
+    /// Media playback ended, but this PC is still taking the phone's calls.
+    Ready,
+    /// The screen mirror took over the sound, while call routing stayed on.
+    Mirroring,
+    /// The user asked for sound before the connection was lost.
+    Reconnecting,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,6 +47,21 @@ struct Session {
     device: DeviceId,
     request: u64,
     phase: Phase,
+    for_apps: bool,
+    /// Explicit phone sound has played for this request or one it resumed.
+    calls_armed: bool,
+}
+
+impl Session {
+    fn ask(device: DeviceId, for_apps: bool, previous: Option<Self>) -> Self {
+        Self {
+            device,
+            request: NEXT_REQUEST.fetch_add(1, Ordering::Relaxed),
+            phase: Phase::Asking,
+            for_apps,
+            calls_armed: !for_apps && previous.is_some_and(|session| session.calls_armed),
+        }
+    }
 }
 
 /// The one phone whose sound plays here, if any.
@@ -48,9 +69,6 @@ static ACTIVE: Mutex<Option<Session>> = Mutex::new(None);
 static NEXT_REQUEST: AtomicU64 = AtomicU64::new(0);
 /// Serialize remote stop/start commands, including rapid source changes.
 static REMOTE: tokio::sync::Mutex<Option<Session>> = tokio::sync::Mutex::const_new(None);
-/// Whether it plays for the phone's app windows (it stops with the last
-/// one), rather than because it was turned on here.
-static FOR_APPS: AtomicBool = AtomicBool::new(false);
 
 fn active() -> Option<Session> {
     *ACTIVE.lock().unwrap_or_else(|e| e.into_inner())
@@ -61,45 +79,51 @@ fn changed() {
     core_host::host().hub.changed(Changes::MEDIA | Changes::MIRROR);
 }
 
-/// A callback from an old stream must not change a newer request, even
-/// when the user has switched away from and back to the same phone.
-fn replace_current(active: &mut Option<Session>, expected: Session, next: Option<Session>) -> bool {
-    if active.is_some_and(|s| s.device == expected.device && s.request == expected.request) {
-        *active = next;
-        true
-    } else {
-        false
-    }
-}
-
-fn update_current(expected: Session, next: Option<Session>) -> bool {
-    let replaced = replace_current(&mut ACTIVE.lock().unwrap_or_else(|e| e.into_inner()), expected, next);
-    if replaced {
-        changed();
-    }
-    replaced
-}
-
 fn is_current(session: Session) -> bool {
     active().is_some_and(|s| s.device == session.device && s.request == session.request)
 }
 
-fn take_current(active: &mut Option<Session>, expected: Session, phase: Option<Phase>) -> Option<Session> {
-    active.filter(|s| {
+/// Retires one stream by request ID, preserving an explicit request when it can still be used.
+fn retire_stream(
+    active: &mut Option<Session>,
+    expected: Session,
+    phase: Option<Phase>,
+    next: Option<Phase>,
+) -> Option<Session> {
+    let current = active.filter(|s| {
         s.device == expected.device
             && s.request == expected.request
             && phase.is_none_or(|phase| s.phase == phase)
     })?;
-    active.take()
+    *active = next
+        .filter(|next| !current.for_apps && (*next == Phase::Reconnecting || current.calls_armed))
+        .map(|phase| Session { phase, ..current });
+    Some(current)
 }
 
-fn clear_current(session: Session, phase: Option<Phase>) -> bool {
-    let cleared =
-        take_current(&mut ACTIVE.lock().unwrap_or_else(|e| e.into_inner()), session, phase).is_some();
-    if cleared {
-        changed();
-    }
-    cleared
+fn clear_current(session: Session, phase: Option<Phase>, next: Option<Phase>) -> Option<Session> {
+    let current = retire_stream(
+        &mut ACTIVE.lock().unwrap_or_else(|e| e.into_inner()),
+        session,
+        phase,
+        next.filter(|phase| *phase == Phase::Reconnecting || cfg!(windows)),
+    )?;
+    changed();
+    Some(current)
+}
+
+fn link_lost(active: &mut Option<Session>, device: DeviceId) -> bool {
+    let Some(session) =
+        active.filter(|s| s.device == device && !matches!(s.phase, Phase::Mirroring | Phase::Reconnecting))
+    else {
+        return false;
+    };
+    *active = (!session.for_apps).then(|| Session {
+        request: NEXT_REQUEST.fetch_add(1, Ordering::Relaxed),
+        phase: Phase::Reconnecting,
+        ..session
+    });
+    true
 }
 
 // ---- How loud it plays here (#577) ----
@@ -186,15 +210,22 @@ pub fn playing(device: &DeviceId) -> bool {
     state_for(active(), device) == "playing"
 }
 
+/// Whether the user enabled phone sound independently of any mirror window.
+pub fn routes_calls(device: DeviceId) -> bool {
+    active().is_some_and(|s| s.device == device && s.calls_armed)
+}
+
 fn state_for(session: Option<Session>, device: &DeviceId) -> &'static str {
     match session.filter(|s| s.device == *device) {
         None => "off",
         Some(Session { phase: Phase::Asking, .. }) => "asking",
         Some(Session { phase: Phase::Playing, .. }) => "playing",
+        Some(Session { phase: Phase::Ready | Phase::Mirroring, .. }) => "ready",
+        Some(Session { phase: Phase::Reconnecting, .. }) => "reconnecting",
     }
 }
 
-/// "off", "asking" (waiting for this phone) or "playing".
+/// The phone's sound request state, including when only call routing remains.
 pub fn state(device: &DeviceId) -> &'static str {
     state_for(active(), device)
 }
@@ -202,11 +233,43 @@ pub fn state(device: &DeviceId) -> &'static str {
 /// Starts or stops playing the selected phone's sound here.
 pub fn set_on(device: DeviceId, on: bool) {
     if !on {
-        stop_for_window(device);
+        if let Some(session) = active().filter(|s| s.device == device)
+            && let Some(session) = clear_current(session, None, None)
+        {
+            stop_remote(session);
+            if !session.for_apps {
+                crate::call_audio::stop(device);
+            }
+        }
         return;
     }
     if let Some((device, name)) = phone(device) {
-        start(device, name, false);
+        start(device, name, false, None);
+    }
+}
+
+pub fn on_event(event: &NodeEvent) {
+    let device = match event {
+        NodeEvent::LinkChanged { device, link: LinkState::Offline { .. } } => {
+            if link_lost(&mut ACTIVE.lock().unwrap_or_else(|e| e.into_inner()), *device) {
+                changed();
+            }
+            return;
+        }
+        NodeEvent::DeviceRemoved(device) => {
+            if let Some(session) = active().filter(|s| s.device == *device) {
+                clear_current(session, None, None);
+            }
+            return;
+        }
+        NodeEvent::LinkChanged { device, link: LinkState::Online { .. } } => *device,
+        NodeEvent::Capabilities(matrix) => matrix.device,
+        _ => return,
+    };
+    if let Some(session) = active().filter(|s| s.device == device && s.phase == Phase::Reconnecting)
+        && let Some((device, name)) = phone(device)
+    {
+        start(device, name, false, Some(session));
     }
 }
 
@@ -216,44 +279,59 @@ pub fn for_app_windows(device: DeviceId, open: bool) {
     match active() {
         None if open => {
             let Some((_, name)) = phone(device) else { return };
-            start(device, name, true);
+            start(device, name, true, None);
         }
-        Some(session) if session.device == device && !open && FOR_APPS.load(Ordering::Relaxed) => {
-            stop(session)
+        Some(session) if session.device == device && !open && session.for_apps => {
+            if clear_current(session, None, None).is_some() {
+                stop_remote(session);
+            }
         }
         _ => {}
     }
 }
 
-/// Asks `device` for its sound. `quiet`: for app windows, which work without
-/// it, so a phone that can't share it only says so in the log.
-fn start(device: DeviceId, name: String, quiet: bool) {
+/// Asks `device` for sound, or resumes an explicit request after reconnecting.
+fn start(device: DeviceId, name: String, quiet: bool, reconnecting: Option<Session>) {
     let Some(node) = core_host::node() else { return };
-    let session = {
+    let (session, previous) = {
         let mut active = ACTIVE.lock().unwrap_or_else(|e| e.into_inner());
+        if reconnecting.is_some() && *active != reconnecting {
+            return;
+        }
         if let Some(current) = *active {
             // App windows must not replace sound explicitly turned on here.
             if quiet {
                 return;
             }
-            FOR_APPS.store(false, Ordering::Relaxed);
-            if current.device == device {
+            if current.device == device && matches!(current.phase, Phase::Asking | Phase::Playing) {
+                *active = Some(Session {
+                    for_apps: false,
+                    calls_armed: current.calls_armed || current.phase == Phase::Playing,
+                    ..current
+                });
+                drop(active);
+                if current.phase == Phase::Playing {
+                    crate::call_audio::start(device, true);
+                }
                 return;
             }
         }
-        FOR_APPS.store(quiet, Ordering::Relaxed);
-        let session =
-            Session { device, request: NEXT_REQUEST.fetch_add(1, Ordering::Relaxed), phase: Phase::Asking };
-        *active = Some(session);
-        session
+        let session = Session::ask(device, quiet, active.filter(|s| s.device == device));
+        let previous = active.replace(session);
+        (session, previous)
     };
+    if let Some(previous) = previous.filter(|s| s.calls_armed && s.device != device) {
+        crate::call_audio::stop(previous.device);
+    }
     changed();
     core_host::spawn(async move {
         let mut remote = REMOTE.lock().await;
         if !is_current(session) {
             return;
         }
-        if let Some(previous) = remote.take() {
+        if let Some(previous) = remote.take()
+            && reconnecting.is_none_or(|session| session.device != previous.device)
+        {
             node.mirror_stop(previous.device, MIRROR_SCREEN).await;
         }
         if !is_current(session) {
@@ -275,7 +353,9 @@ fn start(device: DeviceId, name: String, quiet: bool) {
         };
         if let Err(e) = node.mirror_start(device, options).await {
             *remote = None;
-            if !update_current(session, None) {
+            let offline = matches!(e, Error::Offline);
+            let next = if offline { Phase::Reconnecting } else { Phase::Ready };
+            if clear_current(session, Some(Phase::Asking), Some(next)).is_none() || offline {
                 return;
             }
             if quiet {
@@ -287,7 +367,7 @@ fn start(device: DeviceId, name: String, quiet: bool) {
                 Error::Unsupported => {
                     tr!("PhoneSound", "Update NectarLink on %1 to play its sound here.", name)
                 }
-                Error::Offline | Error::NotPaired => tr!("PhoneSound", "The phone isn't connected."),
+                Error::NotPaired => tr!("PhoneSound", "The phone isn't connected."),
                 // The phone couldn't show its request (notifications off, say).
                 e => {
                     tracing::warn!(error = %e, "the phone couldn't share its sound");
@@ -303,17 +383,10 @@ fn start(device: DeviceId, name: String, quiet: bool) {
         drop(remote);
         // Nobody answered the phone's prompt: stop waiting.
         tokio::time::sleep(ASK_TIMEOUT).await;
-        if clear_current(session, Some(Phase::Asking)) {
+        if clear_current(session, Some(Phase::Asking), Some(Phase::Ready)).is_some() {
             stop_remote(session);
         }
     });
-}
-
-/// Stops this request and tells its phone.
-fn stop(session: Session) {
-    if clear_current(session, None) {
-        stop_remote(session);
-    }
 }
 
 fn stop_remote(session: Session) {
@@ -330,15 +403,18 @@ fn stop_remote(session: Session) {
 /// The mirror window is about to ask `device` for its screen, which brings
 /// the sound too: the phone shares one or the other, so this one ends first.
 pub fn stop_for_window(device: DeviceId) {
-    if let Some(session) = active().filter(|s| s.device == device) {
-        stop(session);
+    if let Some(session) = active().filter(|s| s.device == device && s.phase != Phase::Mirroring)
+        && let Some(session) = clear_current(session, None, Some(Phase::Mirroring))
+        && matches!(session.phase, Phase::Asking | Phase::Playing)
+    {
+        stop_remote(session);
     }
 }
 
 /// The sink for `device`'s sound stream while it plays here without a window.
 pub fn sink(device: &DeviceId) -> Option<Arc<dyn MirrorSink>> {
     active()
-        .filter(|s| s.device == *device)
+        .filter(|s| s.device == *device && matches!(s.phase, Phase::Asking | Phase::Playing))
         .map(|session| Arc::new(Sink { session, player: Mutex::new(None) }) as Arc<dyn MirrorSink>)
 }
 
@@ -366,14 +442,33 @@ impl MirrorSink for Sink {
         let playing = player.is_some();
         *self.player.lock().unwrap_or_else(|e| e.into_inner()) = player;
         if playing {
-            update_current(self.session, Some(Session { phase: Phase::Playing, ..self.session }));
-            tell_phone(self.session.device);
+            let playing = {
+                let mut active = ACTIVE.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(s) = active.as_mut().filter(|s| {
+                    s.request == self.session.request && matches!(s.phase, Phase::Asking | Phase::Playing)
+                }) {
+                    s.phase = Phase::Playing;
+                    s.calls_armed = !s.for_apps;
+                    true
+                } else {
+                    false
+                }
+            };
+            if playing {
+                changed();
+                tell_phone(self.session.device);
+                if routes_calls(self.session.device) {
+                    crate::call_audio::start(self.session.device, true);
+                }
+            }
         }
     }
 
     fn audio(&self, _time_us: u64, mut data: Vec<u8>) {
         // The mirror window's mute is the phone's sound on this PC.
-        if !is_current(self.session) || crate::mirror::muted() {
+        if !active().is_some_and(|s| s.request == self.session.request && s.phase == Phase::Playing)
+            || crate::mirror::muted()
+        {
             return;
         }
         apply_volume(&mut data);
@@ -386,7 +481,7 @@ impl MirrorSink for Sink {
         self.player.lock().unwrap_or_else(|e| e.into_inner()).take();
         // An empty Elevated stream can be followed by the phone's consent
         // prompt. Keep waiting for that fallback until sound plays or times out.
-        if clear_current(self.session, Some(Phase::Playing)) {
+        if clear_current(self.session, Some(Phase::Playing), Some(Phase::Ready)).is_some() {
             let session = self.session;
             core_host::spawn(async move {
                 let mut remote = REMOTE.lock().await;
@@ -406,41 +501,99 @@ mod tests {
     const SECOND: DeviceId = DeviceId([2; 32]);
 
     #[test]
-    fn ended_stream_clears_only_its_own_playing_request() {
-        let request = Session { device: SECOND, request: 1, phase: Phase::Asking };
-        let playing = Session { phase: Phase::Playing, ..request };
+    fn ended_explicit_stream_leaves_calls_armed_until_stopped() {
+        let request = Session::ask(SECOND, false, None);
+        let playing = Session { phase: Phase::Playing, calls_armed: true, ..request };
         let mut active = Some(playing);
-        assert_eq!(take_current(&mut active, request, None), Some(playing));
-        assert_eq!(take_current(&mut active, request, None), None);
-        // A locally stopped stream has already been cleared.
-        assert_eq!(take_current(&mut None, request, None), None);
+        assert_eq!(
+            retire_stream(&mut active, request, Some(Phase::Playing), Some(Phase::Ready)),
+            Some(playing)
+        );
+        assert_eq!(state_for(active, &SECOND), "ready");
+        assert_eq!(retire_stream(&mut active, request, Some(Phase::Playing), Some(Phase::Ready)), None);
+        retire_stream(&mut active, request, None, None);
+        assert_eq!(active, None);
+
+        let app_window = Session { for_apps: true, calls_armed: false, ..playing };
+        active = Some(app_window);
+        assert_eq!(
+            retire_stream(&mut active, app_window, Some(Phase::Playing), Some(Phase::Ready)),
+            Some(app_window)
+        );
+        assert_eq!(active, None);
+    }
+
+    #[test]
+    fn only_explicit_phone_sound_waits_to_resume_after_link_loss() {
+        let playing =
+            Session { phase: Phase::Playing, calls_armed: true, ..Session::ask(FIRST, false, None) };
+        for phase in [Phase::Playing, Phase::Ready] {
+            let previous = Session { phase, ..playing };
+            let mut active = Some(previous);
+            assert!(!link_lost(&mut active, SECOND));
+            assert!(link_lost(&mut active, FIRST));
+            let reconnecting = active.unwrap();
+            assert_eq!(state_for(active, &FIRST), "reconnecting");
+            assert_eq!(retire_stream(&mut active, previous, None, None), None);
+            assert!(!link_lost(&mut active, FIRST));
+            assert_eq!(retire_stream(&mut active, reconnecting, None, None), Some(reconnecting));
+            assert_eq!(active, None);
+        }
+
+        let mirroring = Session { phase: Phase::Mirroring, ..playing };
+        let mut active = Some(mirroring);
+        assert!(!link_lost(&mut active, FIRST));
+        assert_eq!(active, Some(mirroring));
+
+        let mut active = Some(Session { for_apps: true, calls_armed: false, ..playing });
+        assert!(link_lost(&mut active, FIRST));
+        assert_eq!(active, None);
+    }
+
+    #[test]
+    fn reconnection_keeps_calls_armed_while_media_waits_and_after_it_times_out() {
+        for (phase, calls_armed) in [(Phase::Asking, false), (Phase::Playing, true)] {
+            let mut active = Some(Session { phase, calls_armed, ..Session::ask(FIRST, false, None) });
+            assert!(link_lost(&mut active, FIRST));
+            let resumed = Session::ask(FIRST, false, active);
+            active = Some(resumed);
+            assert_eq!(state_for(active, &FIRST), "asking");
+            assert_eq!(resumed.calls_armed, calls_armed);
+
+            retire_stream(&mut active, resumed, Some(Phase::Asking), Some(Phase::Ready));
+            assert_eq!(state_for(active, &FIRST), if calls_armed { "ready" } else { "off" });
+            assert_eq!(active.is_some_and(|s| s.calls_armed), calls_armed);
+        }
     }
 
     #[test]
     fn timeouts_and_old_streams_cannot_end_playing_or_newer_requests() {
-        let old = Session { device: SECOND, request: 1, phase: Phase::Asking };
-        let playing = Session { phase: Phase::Playing, ..old };
+        let old = Session::ask(SECOND, false, None);
+        let playing = Session { phase: Phase::Playing, calls_armed: true, ..old };
         let mut active = Some(playing);
-        assert_eq!(take_current(&mut active, old, Some(Phase::Asking)), None);
+        assert_eq!(retire_stream(&mut active, old, Some(Phase::Asking), None), None);
         assert_eq!(active, Some(playing));
-        let new = Session { request: 2, ..old };
+        let new = Session::ask(SECOND, false, None);
         active = Some(new);
-        assert_eq!(take_current(&mut active, old, None), None);
+        assert_eq!(retire_stream(&mut active, old, None, Some(Phase::Ready)), None);
         assert_eq!(active, Some(new));
-        assert_eq!(take_current(&mut active, new, Some(Phase::Asking)), Some(new));
+        assert_eq!(retire_stream(&mut active, new, Some(Phase::Asking), None), Some(new));
     }
 
     #[test]
     fn empty_elevated_stream_keeps_waiting_for_phone_consent() {
-        let request = Session { device: SECOND, request: 1, phase: Phase::Asking };
+        let request = Session::ask(SECOND, false, None);
         let mut active = Some(request);
-        assert_eq!(take_current(&mut active, request, Some(Phase::Playing)), None);
+        assert_eq!(retire_stream(&mut active, request, Some(Phase::Playing), Some(Phase::Ready)), None);
         assert_eq!(active, Some(request));
         // The fallback capture can start on the same request.
-        let playing = Session { phase: Phase::Playing, ..request };
-        assert!(replace_current(&mut active, request, Some(playing)));
+        let playing = Session { phase: Phase::Playing, calls_armed: true, ..request };
+        active = Some(playing);
         assert_eq!(state_for(active, &SECOND), "playing");
-        assert_eq!(take_current(&mut active, request, Some(Phase::Playing)), Some(playing));
+        assert_eq!(
+            retire_stream(&mut active, request, Some(Phase::Playing), Some(Phase::Ready)),
+            Some(playing)
+        );
     }
 
     #[test]
@@ -503,12 +656,14 @@ mod tests {
 
     #[test]
     fn each_phone_shows_only_its_own_sound_state() {
-        for phase in [Phase::Asking, Phase::Playing] {
-            let first = Session { device: FIRST, request: 0, phase };
-            let second = Session { device: SECOND, request: 1, phase };
+        for (phase, expected) in
+            [(Phase::Asking, "asking"), (Phase::Playing, "playing"), (Phase::Ready, "ready")]
+        {
+            let first =
+                Session { phase, calls_armed: phase != Phase::Asking, ..Session::ask(FIRST, false, None) };
+            let second = Session { device: SECOND, ..first };
             assert_eq!(state_for(Some(first), &SECOND), "off");
             assert_eq!(state_for(Some(second), &FIRST), "off");
-            let expected = if phase == Phase::Asking { "asking" } else { "playing" };
             assert_eq!(state_for(Some(second), &SECOND), expected);
         }
         assert_eq!(state_for(None, &SECOND), "off");
@@ -516,28 +671,25 @@ mod tests {
 
     #[test]
     fn old_phone_callbacks_and_stop_do_not_clear_the_selected_phone() {
-        let first = Session { device: FIRST, request: 0, phase: Phase::Playing };
-        let second = Session { device: SECOND, request: 1, phase: Phase::Asking };
+        let first = Session { phase: Phase::Playing, calls_armed: true, ..Session::ask(FIRST, false, None) };
+        let second = Session::ask(SECOND, false, None);
         let mut active = Some(second);
-        assert!(!replace_current(&mut active, first, None));
-        assert!(!replace_current(&mut active, first, Some(first)));
+        assert_eq!(retire_stream(&mut active, first, None, None), None);
         assert_eq!(active, Some(second));
-        let playing = Session { phase: Phase::Playing, ..second };
-        assert!(replace_current(&mut active, second, Some(playing)));
+        let playing = Session { phase: Phase::Playing, calls_armed: true, ..second };
+        active = Some(playing);
         assert_eq!(state_for(active, &SECOND), "playing");
-        assert!(replace_current(&mut active, second, None));
+        assert_eq!(retire_stream(&mut active, second, None, None), Some(playing));
         assert_eq!(active, None);
     }
 
     #[test]
     fn switching_back_does_not_accept_callbacks_from_the_old_request() {
-        let old = Session { device: FIRST, request: 0, phase: Phase::Asking };
-        let new = Session { request: 2, ..old };
+        let old = Session::ask(FIRST, false, None);
+        let new = Session::ask(FIRST, false, None);
         let mut active = Some(new);
         // A late error, end-of-stream, or timeout from the earlier request.
-        assert!(!replace_current(&mut active, old, None));
-        // A late audio format must not mark the new request as playing.
-        assert!(!replace_current(&mut active, old, Some(Session { phase: Phase::Playing, ..old })));
+        assert_eq!(retire_stream(&mut active, old, None, None), None);
         assert_eq!(active, Some(new));
     }
 }
