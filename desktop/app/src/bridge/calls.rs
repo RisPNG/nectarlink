@@ -378,7 +378,13 @@ impl qobject::PhoneCall {
     }
 
     pub fn volume(&self, up: bool) {
-        self.send(CallCommand::Volume(up));
+        if self.rust().call.as_ref().is_some_and(|(d, _)| crate::call_audio::phase().device() == Some(*d)) {
+            let level = crate::settings::phone_sound_volume();
+            let level = if up { level.saturating_add(5).min(100) } else { level.saturating_sub(5) };
+            crate::phone_sound::set_volume(level, true);
+        } else {
+            self.send(CallCommand::Volume(up));
+        }
     }
 
     pub fn refresh_call_mics(mut self: Pin<&mut Self>) {
