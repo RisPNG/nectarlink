@@ -75,8 +75,8 @@ class MirrorService : Service() {
         val pc = intent?.getStringExtra(EXTRA_PC)
         val isElevated = intent?.getBooleanExtra(EXTRA_ELEVATED, false) == true
         val consent = intent?.let { IntentCompat.getParcelableExtra(it, EXTRA_CONSENT, Intent::class.java) }
-        if (pc == null || (!isElevated && consent == null) || projection != null || elevatedSocket != null || elevatedStarting) {
-            if (projection == null && elevatedSocket == null && !elevatedStarting) {
+        if (pc == null || (!isElevated && consent == null) || pcId != null || projection != null || elevatedSocket != null || elevatedStarting) {
+            if (pcId == null && projection == null && elevatedSocket == null && !elevatedStarting) {
                 createChannel(this)
                 val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     if (isElevated) ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE else ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
@@ -366,7 +366,7 @@ class MirrorService : Service() {
     /** The sound, on a stream of its own; the screen goes on without it if it can't. */
     private suspend fun startSound(core: app.nectarlink.android.core.Core, pc: String) {
         // Sharing only the sound, there's nothing left once it's gone.
-        val endSharing = { if (soundOnly) main.post { if (pcId == pc) stopSharing() } }
+        val endSharing = { main.post { if (soundOnly && pcId == pc) stopSharing() } }
         if (!SoundCapture.canCapture(this)) {
             endSharing()
             return
@@ -377,30 +377,38 @@ class MirrorService : Service() {
             return
         }
         main.post {
+            if (pcId != pc || sound != null) {
+                stream.end()
+                return@post
+            }
             val running = projection
-            if ((running == null &&
-                    !app.nectarlink.android.elevated.Elevated.hasCapability(NectarlinkServiceContract.CAP_DEVICE_AUDIO)) ||
-                pcId != pc
+            if (running == null &&
+                !app.nectarlink.android.elevated.Elevated.hasCapability(NectarlinkServiceContract.CAP_DEVICE_AUDIO)
             ) {
                 stream.end()
                 endSharing()
                 return@post
             }
-            val capture = SoundCapture(running, stream) {
-                // Some phones refuse the helper's capture. Screen-capture consent
-                // still works. Not when this was stopped on purpose: `sound` is gone then.
-                val current = sound
-                if (soundOnly && running == null && current != null && !current.sentSound) askForSound(pc)
-                endSharing()
+            lateinit var capture: SoundCapture
+            capture = SoundCapture(running, stream) {
+                main.post ended@{
+                    if (sound !== capture) return@ended
+                    sound = null
+                    if (soundOnly) {
+                        val needsConsent = running == null && !capture.sentSound
+                        stopSharing()
+                        if (needsConsent) askForSound(pc)
+                    } else {
+                        _session.value = _session.value.copy(audio = false)
+                        applyPower()
+                    }
+                }
             }
             sound = capture
+            _session.value = _session.value.copy(audio = true)
             capture.start()
             // Sound alone also needs the phone awake and its Wi-Fi out of power save (#94).
             applyPower()
-            // Only the sound, so it's heard on the PC instead of the phone (#94).
-            if (soundOnly && sound?.usesPlaybackCapture == true) PhoneQuiet.start(this)
-            // Its volume keys set how loud it plays there (#577).
-            if (soundOnly) PcSoundVolume.start(this, pc)
         }
     }
 
@@ -447,8 +455,6 @@ class MirrorService : Service() {
         encoder = null
         sound?.stop()
         sound = null
-        PhoneQuiet.end(this)
-        PcSoundVolume.stop()
         projection?.let { runCatching { it.stop() } }
         projection = null
         pcId = null
@@ -515,9 +521,8 @@ class MirrorService : Service() {
          * the Elevated shell helper, without a `MediaProjection` consent prompt.
          */
         fun startElevated(context: Context, request: MirrorRequest): Boolean {
-            if (!app.nectarlink.android.elevated.Elevated.hasCapability(NectarlinkServiceContract.CAP_SCREEN_MIRROR) ||
-                current != null
-            ) {
+            val capability = if (request.soundOnly) NectarlinkServiceContract.CAP_DEVICE_AUDIO else NectarlinkServiceContract.CAP_SCREEN_MIRROR
+            if (!app.nectarlink.android.elevated.Elevated.hasCapability(capability) || current != null) {
                 return false
             }
             val intent = Intent(context, MirrorService::class.java)
@@ -556,7 +561,7 @@ class MirrorService : Service() {
         }
 
         /** Updates keep-awake and screen-off state while mirroring to [pcId]. */
-        /** Sends the sound to the PC, or stops so the phone plays it again (#178). */
+        /** Starts or stops sending the phone's sound to the PC. */
         fun setSound(pcId: String, on: Boolean) {
             val service = current ?: return
             service.main.post {
@@ -569,6 +574,7 @@ class MirrorService : Service() {
                 } else {
                     service.sound?.stop()
                     service.sound = null
+                    _session.value = _session.value.copy(audio = false)
                     service.applyPower()
                 }
             }

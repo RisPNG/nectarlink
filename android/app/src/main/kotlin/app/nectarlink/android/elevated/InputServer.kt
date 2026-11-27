@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package app.nectarlink.android.elevated
 
+import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioRecord
+import android.os.Build
+import android.os.Process
 import android.os.SystemClock
 import android.view.InputDevice
 import android.view.InputEvent
@@ -54,9 +61,6 @@ object InputServer {
     private const val POWER_MODE_OFF = 0
     private const val POWER_MODE_NORMAL = 2
     private const val STREAM_MUSIC = 3
-    private const val DEVICE_OUT_REMOTE_SUBMIX = 0x8000
-    private const val SUBMIX_POLL_MS = 500L
-    private const val SUBMIX_PRESS_MS = 40L
     private const val VOLUME_POLL_MS = 30L
     private const val VOLUME_SETTLE_MS = 600L
     private const val MAX_VOLUME_PRESSES = 200
@@ -487,7 +491,7 @@ object InputServer {
             val first = runCatching { reader.nextLine(MAX_LINE_CHARS) }.getOrNull()
             client.soTimeout = 0
             if (first != null && first.startsWith("V ")) return appWindow(client, first, reader)
-            if (first == "A") return streamDeviceAudio(client.getOutputStream(), injector)
+            if (first == "A") return streamDeviceAudio(client.getOutputStream())
             if (first == "CALL") return CallAudio.serve(client)
             if (first == "CALLCHECK") return CallAudio.check(client)
             val writer = java.io.OutputStreamWriter(client.getOutputStream(), Charsets.UTF_8)
@@ -513,115 +517,78 @@ object InputServer {
     }
 
     /**
-     * Captures internal device audio at 48 kHz 16-bit stereo PCM in the
-     * `shell` process (`CAPTURE_AUDIO_OUTPUT` / `REMOTE_SUBMIX`) without a
-     * MediaProjection prompt and streams 10 ms (1920-byte) frames until the
-     * socket closes.
+     * Routes playback to an addressed, fixed-gain remote submix and sends its 48 kHz stereo PCM to the app.
+     * Android limits mixed speaker and loopback playback to media, games, and some voice communication, so this mix makes the PC the output for its matching tracks.
      */
     @android.annotation.SuppressLint("MissingPermission", "PrivateApi", "DiscouragedPrivateApi")
-    private fun streamDeviceAudio(out: java.io.OutputStream, injector: Injector) {
-        val rate = 48_000
-        val channelMask = android.media.AudioFormat.CHANNEL_IN_STEREO
-        val encoding = android.media.AudioFormat.ENCODING_PCM_16BIT
-        val frameBytes = (rate / 100) * 2 * 2 // 1920 bytes = 10 ms
-        val minBuf = maxOf(
-            android.media.AudioRecord.getMinBufferSize(rate, channelMask, encoding),
-            frameBytes * 4,
-        )
-        val format = android.media.AudioFormat.Builder()
-            .setSampleRate(rate)
-            .setChannelMask(channelMask)
-            .setEncoding(encoding)
-            .build()
-
-        fun openRecorder(): android.media.AudioRecord? {
-            // 1. Try AudioAttributes.Builder.setInternalCapturePreset(REMOTE_SUBMIX = 8) via reflection.
-            runCatching<Unit> {
-                val attrBuilder = android.media.AudioAttributes.Builder()
-                val setPreset = attrBuilder.javaClass.getMethod(
-                    "setInternalCapturePreset",
-                    Int::class.javaPrimitiveType,
-                )
-                setPreset.invoke(attrBuilder, android.media.MediaRecorder.AudioSource.REMOTE_SUBMIX)
-                val recBuilder = android.media.AudioRecord.Builder()
-                    .setAudioFormat(format)
-                    .setBufferSizeInBytes(minBuf)
-                val setAttrs = recBuilder.javaClass.getMethod(
-                    "setAudioAttributes",
-                    android.media.AudioAttributes::class.java,
-                )
-                setAttrs.invoke(recBuilder, attrBuilder.build())
-                val rec = recBuilder.build()
-                if (rec.state == android.media.AudioRecord.STATE_INITIALIZED) return rec
-                rec.release()
-            }
-            // 2. Try standard AudioRecord with REMOTE_SUBMIX (8).
-            runCatching {
-                val rec = android.media.AudioRecord(
-                    android.media.MediaRecorder.AudioSource.REMOTE_SUBMIX,
-                    rate,
-                    channelMask,
-                    encoding,
-                    minBuf,
-                )
-                if (rec.state == android.media.AudioRecord.STATE_INITIALIZED) return rec
-                rec.release()
-            }
-            // Nothing else: any other source is the microphone, and the PC
-            // asked for what the phone plays, not what it hears.
-            return null
+    private fun streamDeviceAudio(out: java.io.OutputStream) {
+        val context = ShellContext.get()
+        val audio = checkNotNull(context.getSystemService(AudioManager::class.java))
+        val ruleType = Class.forName("android.media.audiopolicy.AudioMixingRule")
+        val ruleBuilderType = Class.forName("android.media.audiopolicy.AudioMixingRule\$Builder")
+        val ruleBuilder = ruleBuilderType.getConstructor().newInstance()
+        val matchUsage = ruleType.getField("RULE_MATCH_ATTRIBUTE_USAGE").getInt(null)
+        val matchUid = ruleType.getField("RULE_MATCH_UID").getInt(null)
+        val addRule = ruleBuilderType.getMethod("addRule", AudioAttributes::class.java, Int::class.javaPrimitiveType)
+        val exclude = ruleBuilderType.getMethod("excludeMixRule", Int::class.javaPrimitiveType, Any::class.java)
+        val usages = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            AudioAttributes::class.java.getMethod("getSdkUsages").invoke(null) as IntArray
+        } else {
+            AudioAttributes::class.java.getField("SDK_USAGES").get(null) as IntArray
         }
+        for (usage in usages) {
+            addRule.invoke(ruleBuilder, AudioAttributes.Builder().setUsage(usage).build(), matchUsage)
+        }
+        // Keep PC playback and helper-injected call audio on their intended routes.
+        exclude.invoke(ruleBuilder, matchUid, context.packageManager.getPackageUid(PKG, 0))
+        exclude.invoke(ruleBuilder, matchUid, Process.myUid())
+        val rule = ruleBuilderType.getMethod("build").invoke(ruleBuilder)
 
-        val recorder = openRecorder() ?: return
+        val rate = 48_000
+        val format = AudioFormat.Builder()
+            .setSampleRate(rate)
+            .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
+            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+            .build()
+        val mixType = Class.forName("android.media.audiopolicy.AudioMix")
+        val mixBuilderType = Class.forName("android.media.audiopolicy.AudioMix\$Builder")
+        val mixBuilder = mixBuilderType.getConstructor(ruleType).newInstance(rule)
+        mixBuilderType.getMethod("setFormat", AudioFormat::class.java).invoke(mixBuilder, format)
+        val loopback = mixType.getField("ROUTE_FLAG_LOOP_BACK").getInt(null)
+        mixBuilderType.getMethod("setRouteFlags", Int::class.javaPrimitiveType).invoke(mixBuilder, loopback)
+        val mix = mixBuilderType.getMethod("build").invoke(mixBuilder)
+
+        val policyType = Class.forName("android.media.audiopolicy.AudioPolicy")
+        val policyBuilderType = Class.forName("android.media.audiopolicy.AudioPolicy\$Builder")
+        val policyBuilder = policyBuilderType.getConstructor(Context::class.java).newInstance(context)
+        policyBuilderType.getMethod("addMix", mixType).invoke(policyBuilder, mix)
+        val policy = policyBuilderType.getMethod("build").invoke(policyBuilder)
+        val register = AudioManager::class.java.getMethod("registerAudioPolicy", policyType)
+        val unregisterName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) "unregisterAudioPolicy" else "unregisterAudioPolicyAsync"
+        val unregister = AudioManager::class.java.getMethod(unregisterName, policyType)
+        val result = register.invoke(audio, policy) as Int
+        check(result == 0) { "device audio policy registration failed: $result" }
+        var recorder: AudioRecord? = null
         try {
-            recorder.startRecording()
-            thread(isDaemon = true, name = "submix-volume") {
-                raiseSubmixVolume(injector) { recorder.recordingState == android.media.AudioRecord.RECORDSTATE_RECORDING }
-            }
-            val buf = ByteArray(frameBytes)
+            val record = policyType.getMethod("createAudioRecordSink", mixType).invoke(policy, mix) as? AudioRecord
+                ?: error("no device audio recorder")
+            recorder = record
+            check(record.state == AudioRecord.STATE_INITIALIZED) { "device audio recorder not initialized" }
+            record.startRecording()
+            check(record.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "device audio recorder did not start" }
+            val buf = ByteArray(rate / 100 * 2 * 2)
             while (true) {
-                val n = recorder.read(buf, 0, buf.size)
+                val n = record.read(buf, 0, buf.size)
                 if (n <= 0) break
                 out.write(buf, 0, n)
                 out.flush()
             }
         } catch (_: java.io.IOException) {
             // Client disconnected.
-        } catch (e: RuntimeException) {
-            // Some phones can't capture the submix from here (startRecording
-            // throws on Android 17 MagicOS, #518): the phone's sound stays
-            // off and the screen still mirrors.
-            System.err.println("device audio unavailable: $e")
         } finally {
-            runCatching { recorder.stop() }
-            runCatching { recorder.release() }
+            runCatching { recorder?.release() }
+            unregister.invoke(audio, policy)
         }
-    }
-
-    /**
-     * The remote submix has a volume of its own, separate from the speaker's
-     * and low by default, so the PC would barely hear anything. Raises it once,
-     * with the volume key (the volume calls are ignored from here on Android
-     * 17), and only while the sound really goes to the submix: anywhere else
-     * this would turn up the phone's speaker.
-     */
-    @android.annotation.SuppressLint("PrivateApi", "DiscouragedPrivateApi")
-    private fun raiseSubmixVolume(injector: Injector, recording: () -> Boolean) {
-        runCatching {
-            val read = musicStreamReader()
-            // The sound moves to the submix once something plays, which may be later.
-            while (recording() && read("getDeviceMaskForStream") and DEVICE_OUT_REMOTE_SUBMIX == 0) {
-                Thread.sleep(SUBMIX_POLL_MS)
-            }
-            val max = read("getStreamMaxVolume")
-            var presses = 0
-            while (recording() && read("getDeviceMaskForStream") and DEVICE_OUT_REMOTE_SUBMIX != 0 &&
-                read("getStreamVolume") < max && presses++ <= max
-            ) {
-                injector.pressKey(KeyEvent.KEYCODE_VOLUME_UP)
-                Thread.sleep(SUBMIX_PRESS_MS)
-            }
-        }.onFailure { System.err.println("can't raise the submix volume: $it") }
     }
 
     /** Brightness 0, remembering what it was, for a panel that can't be turned off. */

@@ -2131,7 +2131,6 @@ Item {
                     }
 
                     // How loud it plays here, apart from the PC's own volume (#577).
-                    // The phone's volume keys move it too.
                     Column {
                         id: phoneSoundVolume
                         readonly property int level: MediaList.revision >= 0 ? MediaList.phoneSoundVolume() : 100

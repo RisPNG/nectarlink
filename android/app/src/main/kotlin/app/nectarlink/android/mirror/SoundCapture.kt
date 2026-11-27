@@ -23,10 +23,9 @@ import app.nectarlink.core.mirrorAudioConfig
 import app.nectarlink.services.client.NectarlinkServiceContract
 
 /**
- * The phone's sound while its screen is shared: what apps play (media, games,
- * and apps that don't say), captured via Android 10+
- * [AudioPlaybackCaptureConfiguration] or via the Elevated `shell` helper's
- * internal submix (`"A"` stream) as 48 kHz stereo PCM in 10 ms packets.
+ * Streams phone playback as 48 kHz stereo PCM in 10 ms packets. Uses the
+ * Elevated helper's fixed-gain submix when available and Android 10+
+ * [AudioPlaybackCaptureConfiguration] when sharing through MediaProjection.
  */
 class SoundCapture(
     private val projection: MediaProjection?,
@@ -36,146 +35,98 @@ class SoundCapture(
 ) {
     @Volatile private var running = false
     @Volatile private var elevatedSocket: ElevatedAudioStream? = null
-    private var thread: Thread? = null
-
-    /**
-     * After [start]: whether the sound comes through Android's playback
-     * capture, which leaves the phone's speaker playing (the Elevated helper's
-     * remote submix takes the sound off it).
-     */
-    var usesPlaybackCapture = false
-        private set
 
     /** Whether any sound got as far as being sent. */
     @Volatile
     var sentSound = false
         private set
 
-    @SuppressLint("MissingPermission")
     fun start() {
-        val proj = projection
-        if (proj != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val record = runCatching {
-                val config = AudioPlaybackCaptureConfiguration.Builder(proj)
-                    .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
-                    .addMatchingUsage(AudioAttributes.USAGE_GAME)
-                    .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
-                    .build()
-                val format = AudioFormat.Builder()
-                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                    .setSampleRate(RATE)
-                    .setChannelMask(AudioFormat.CHANNEL_IN_STEREO)
-                    .build()
-                val minimum = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_STEREO, AudioFormat.ENCODING_PCM_16BIT)
-                AudioRecord.Builder()
-                    .setAudioFormat(format)
-                    .setBufferSizeInBytes(maxOf(minimum, PACKET_BYTES * 8))
-                    .setAudioPlaybackCaptureConfig(config)
-                    .build()
-            }.getOrNull()
-
-            if (record != null && record.state == AudioRecord.STATE_INITIALIZED) {
-                running = true
-                usesPlaybackCapture = true
-                thread = Thread({ runRecord(record) }, "sound-capture").apply {
-                    priority = Thread.MAX_PRIORITY
-                    start()
+        running = true
+        Thread({
+            try {
+                if (running && Elevated.hasCapability(NectarlinkServiceContract.CAP_DEVICE_AUDIO)) {
+                    try {
+                        Elevated.openAudioStream()?.use { socket ->
+                            elevatedSocket = socket
+                            try {
+                                capture(socket.inputStream::read)
+                            } finally {
+                                elevatedSocket = null
+                            }
+                        }
+                    } catch (e: Exception) {
+                        if (running) Log.w(TAG, "elevated sound capture stopped", e)
+                    }
                 }
-                return
+                if (running && !sentSound && projection != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    captureProjection(projection)
+                }
+            } catch (e: Exception) {
+                if (running) Log.w(TAG, "sound capture stopped", e)
+            } finally {
+                running = false
+                stream.end()
+                onEnded()
             }
-            record?.runCatching { release() }
+        }, "sound-capture").apply {
+            priority = Thread.MAX_PRIORITY
+            start()
         }
-
-        if (Elevated.hasCapability(NectarlinkServiceContract.CAP_DEVICE_AUDIO)) {
-            running = true
-            thread = Thread({ runElevated() }, "sound-capture-elevated").apply {
-                priority = Thread.MAX_PRIORITY
-                start()
-            }
-            return
-        }
-
-        Log.w(TAG, "no sound capture available")
-        stream.end()
-        onEnded()
     }
 
-    private fun runRecord(record: AudioRecord) {
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.Q)
+    @SuppressLint("MissingPermission")
+    private fun captureProjection(projection: MediaProjection) {
+        val config = AudioPlaybackCaptureConfiguration.Builder(projection)
+            .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
+            .addMatchingUsage(AudioAttributes.USAGE_GAME)
+            .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
+            .build()
+        val format = AudioFormat.Builder()
+            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+            .setSampleRate(RATE)
+            .setChannelMask(AudioFormat.CHANNEL_IN_STEREO)
+            .build()
+        val minimum = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_STEREO, AudioFormat.ENCODING_PCM_16BIT)
+        val record = AudioRecord.Builder()
+            .setAudioFormat(format)
+            .setBufferSizeInBytes(maxOf(minimum, PACKET_BYTES * 8))
+            .setAudioPlaybackCaptureConfig(config)
+            .build()
         try {
+            if (!running) return
             record.startRecording()
-            sentSound = true
-            if (stream.send(VideoPacketKind.CONFIG, 0u, mirrorAudioConfig(RATE.toUInt(), CHANNELS.toUByte())) == MirrorSendResult.CLOSED) return
-            val started = SystemClock.elapsedRealtimeNanos()
-            val packet = ByteArray(PACKET_BYTES)
-            while (running) {
-                var filled = 0
-                while (filled < packet.size && running) {
-                    val read = record.read(packet, filled, packet.size - filled)
-                    if (read < 0) return
-                    filled += read
-                }
-                if (!running) return
-                val time = ((SystemClock.elapsedRealtimeNanos() - started) / 1000).toULong()
-                if (stream.send(VideoPacketKind.FRAME, time, packet.copyOf()) == MirrorSendResult.CLOSED) return
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "sound capture stopped", e)
+            capture(record::read)
         } finally {
-            running = false
-            runCatching { record.stop() }
             record.release()
-            stream.end()
-            onEnded()
         }
     }
 
-    private fun runElevated() {
-        val sock = Elevated.openAudioStream()
-        if (sock == null) {
-            running = false
-            stream.end()
-            onEnded()
-            return
-        }
-        elevatedSocket = sock
-        try {
-            val input = sock.inputStream
-            val packet = ByteArray(PACKET_BYTES)
-            var configSent = false
-            var started = 0L
-            while (running) {
-                var filled = 0
-                while (filled < packet.size && running) {
-                    val read = input.read(packet, filled, packet.size - filled)
-                    if (read <= 0) return
-                    filled += read
-                }
-                if (!running) return
-                if (!configSent) {
-                    configSent = true
-                    sentSound = true
-                    started = SystemClock.elapsedRealtimeNanos()
-                    if (stream.send(VideoPacketKind.CONFIG, 0u, mirrorAudioConfig(RATE.toUInt(), CHANNELS.toUByte())) == MirrorSendResult.CLOSED) return
-                }
-                val time = ((SystemClock.elapsedRealtimeNanos() - started) / 1000).toULong()
-                if (stream.send(VideoPacketKind.FRAME, time, packet.copyOf()) == MirrorSendResult.CLOSED) return
+    private fun capture(read: (ByteArray, Int, Int) -> Int) {
+        val packet = ByteArray(PACKET_BYTES)
+        var started = 0L
+        while (running) {
+            var filled = 0
+            while (filled < packet.size && running) {
+                val count = read(packet, filled, packet.size - filled)
+                if (count <= 0) return
+                filled += count
             }
-        } catch (e: Exception) {
-            if (running) Log.w(TAG, "elevated sound capture stopped", e)
-        } finally {
-            running = false
-            elevatedSocket = null
-            runCatching { sock.close() }
-            stream.end()
-            onEnded()
+            if (!running) return
+            if (!sentSound) {
+                sentSound = true
+                started = SystemClock.elapsedRealtimeNanos()
+                if (stream.send(VideoPacketKind.CONFIG, 0u, mirrorAudioConfig(RATE.toUInt(), CHANNELS.toUByte())) == MirrorSendResult.CLOSED) return
+            }
+            val time = ((SystemClock.elapsedRealtimeNanos() - started) / 1000).toULong()
+            if (stream.send(VideoPacketKind.FRAME, time, packet.copyOf()) == MirrorSendResult.CLOSED) return
         }
     }
 
     fun stop() {
         running = false
         runCatching { elevatedSocket?.close() }
-        elevatedSocket = null
-        thread = null
     }
 
     companion object {

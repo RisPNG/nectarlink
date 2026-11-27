@@ -1973,18 +1973,6 @@ class Core(context: Context, private val scope: CoroutineScope) : EventListener 
         }
     }
 
-    /**
-     * Automatically sends non-sensitive text copied in the background while Elevated mode is running.
-     * Skips clips NectarLink itself wrote from a PC (`PhoneClipboard.isRecentEcho`).
-     */
-    /** Tells [pcId] how loud to play this phone's sound (#577): the volume keys. */
-    fun mirrorVolume(pcId: String, level: Int) {
-        scope.launch(Dispatchers.IO) {
-            runCatching { node?.mirrorVolume(pcId, level.coerceIn(0, 100).toUByte()) }
-                .onFailure { Log.w(TAG, "can't tell the PC the sound volume", it) }
-        }
-    }
-
     /** Elevated's taps are refused: tells the PC that sent the last ones what to turn on. */
     fun onElevatedInputBlocked() {
         val (pcId, session) = PhonePlatform.lastMirrorInput ?: return
@@ -1993,6 +1981,10 @@ class Core(context: Context, private val scope: CoroutineScope) : EventListener 
         }
     }
 
+    /**
+     * Automatically sends non-sensitive text copied in the background while Elevated mode is running.
+     * Skips clips NectarLink itself wrote from a PC (`PhoneClipboard.isRecentEcho`).
+     */
     fun onElevatedClipboardChanged(text: String, html: String?) {
         if (text.isBlank() || PhoneClipboard.isRecentEcho(text, html)) return
         val now = android.os.SystemClock.elapsedRealtime()
@@ -2591,7 +2583,7 @@ class Core(context: Context, private val scope: CoroutineScope) : EventListener 
             // The same sound on its own, without the screen.
             (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ||
                     Elevated.hasCapability(NectarlinkServiceContract.CAP_DEVICE_AUDIO)) {
-                listOf("mirror.sound", "mirror.volume")
+                listOf("mirror.sound")
             } else {
                 emptyList()
             }) +

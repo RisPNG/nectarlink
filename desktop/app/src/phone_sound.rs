@@ -128,44 +128,13 @@ fn scale(data: &mut [u8], level: u8) {
     }
 }
 
-/// The phone whose sound plays here now (on its own, or with its screen).
-fn sounding_phone() -> Option<DeviceId> {
-    active().filter(|s| s.phase == Phase::Playing).map(|s| s.device).or_else(crate::mirror::sound_device)
-}
-
-/// Tells `device` the volume, so its volume keys and panel start from it.
-/// Phones from before #577 don't take it, which is fine.
-pub fn tell_phone(device: DeviceId) {
-    let Some(node) = core_host::node() else { return };
-    let level = crate::settings::phone_sound_volume();
-    core_host::spawn(async move {
-        if let Err(e) = node.mirror_volume(device, level).await
-            && !matches!(e, Error::Unsupported)
-        {
-            tracing::debug!(error = %e, "couldn't tell the phone its sound volume");
-        }
-    });
-}
-
-/// The slider here moved. `done`: let go, so it's saved and the phone told.
+/// Sets playback gain on this PC. `done` saves the final slider value.
 pub fn set_volume(level: u8, done: bool) {
     if done {
         crate::settings::remember_phone_sound_volume(level);
-        if let Some(device) = sounding_phone() {
-            tell_phone(device);
-        }
     } else {
         crate::settings::set_phone_sound_volume(level);
     }
-    changed();
-}
-
-/// The phone's volume keys, while its sound plays here.
-pub fn volume_from_phone(device: DeviceId, level: u8) {
-    if sounding_phone() != Some(device) {
-        return;
-    }
-    crate::settings::remember_phone_sound_volume(level);
     changed();
 }
 
@@ -367,7 +336,6 @@ impl MirrorSink for Sink {
         *self.player.lock().unwrap_or_else(|e| e.into_inner()) = player;
         if playing {
             update_current(self.session, Some(Session { phase: Phase::Playing, ..self.session }));
-            tell_phone(self.session.device);
         }
     }
 

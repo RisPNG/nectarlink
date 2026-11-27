@@ -740,7 +740,7 @@ pub struct Settings {
     #[serde(default = "default_sound_buffer_ms", alias = "phone_sound_buffer_ms")]
     pub phone_sound_buffer_ms: u16,
     /// How loud a phone's sound plays here, in percent of what it sends:
-    /// the slider under Phone sound on this PC, or the phone's volume keys.
+    /// the slider under Phone sound on this PC.
     #[serde(default = "default_phone_sound_volume")]
     pub phone_sound_volume: u8,
     /// The battery level that counts as low, in percent (default 15).
