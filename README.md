@@ -353,6 +353,8 @@ bugs and agreed feature work. For quick help and chat, there's the
 
 ## Contributing
 
+Before working on this fork, read and follow the [fork development policy](dev/README.md).
+
 Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first;
 for anything larger than a small fix, open an issue to agree on the approach.
 Contributions are accepted under the [Developer Certificate of Origin](DCO.txt),
