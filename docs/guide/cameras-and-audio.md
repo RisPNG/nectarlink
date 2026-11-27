@@ -82,6 +82,7 @@ To hear what your phone plays (music, videos, app sounds) through your PC's spea
 - With `Elevated` it starts right away. Otherwise your phone asks first, as it does for mirroring: tap the notification, then allow it. Android's prompt talks about sharing your screen, but only the sound goes to the PC.
 - `Elevated` routes matching Android playback to the PC at a fixed capture gain. Android returns those sounds to the phone when the session closes. Standard capture on Android 10 or newer copies eligible media and game audio and leaves local playback audible.
 - The **Phone sound volume** control on Home changes the PC's playback level. The phone's buttons stay assigned to the phone.
+- Playback resumes after reconnecting if the switch was on. On compatible devices, the switch also routes cellular calls you answer or dial on the phone. See [Calls](calls.md#talking-through-your-pc-windows).
 - Opening the phone's mirror window takes over, since that brings the sound with the picture. Turn it off on the PC, or tap **Stop** on the phone.
 
 ### 4. Voice Recorder: Record on Phone, Save on PC

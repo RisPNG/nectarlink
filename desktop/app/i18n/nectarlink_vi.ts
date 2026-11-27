@@ -1189,6 +1189,11 @@
         <source>The PC&apos;s microphone couldn&apos;t be started. Pick another one in Settings › Camera &amp; Audio › Microphone for calls, or try again.</source>
         <translation>Không khởi động được micrô của PC. Chọn micrô khác trong Cài đặt › Máy ảnh &amp; Âm thanh › Micrô cho cuộc gọi, hoặc thử lại.</translation>
     </message>
+    <message>
+        <location filename="rust_strings.h" line="65"/>
+        <source>The PC couldn&apos;t play the call.</source>
+        <translation>Máy tính không phát được âm thanh cuộc gọi.</translation>
+    </message>
 </context>
 <context>
     <name>CallsPage</name>
@@ -6117,6 +6122,11 @@ Nó cần gì
         <location filename="../qml/pages/HomePage.qml" line="1"/>
         <source>Bluetooth: notifications, texts and calls</source>
         <translation>Bluetooth: thông báo, tin nhắn và cuộc gọi</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/HomePage.qml" line="2110"/>
+        <source>Ready to play calls</source>
+        <translation>Sẵn sàng phát âm thanh cuộc gọi</translation>
     </message>
 </context>
 <context>

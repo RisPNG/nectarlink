@@ -2107,6 +2107,8 @@ Item {
                         checked: sound !== "off"
                         caption: sound === "playing" ? qsTr("Playing %1's sound").arg(home.name)
                             : sound === "asking" ? qsTr("Allow it on %1").arg(home.name)
+                            : sound === "ready" ? qsTr("Ready to play calls")
+                            : sound === "reconnecting" ? qsTr("Waiting for %1").arg(home.name)
                             : ""
                         onToggled: (on) => MediaList.setPhoneSound(home.deviceId, on)
                     }

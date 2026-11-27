@@ -1204,6 +1204,11 @@
         <source>The PC&apos;s microphone couldn&apos;t be started. Pick another one in Settings › Camera &amp; Audio › Microphone for calls, or try again.</source>
         <translation>Bilgisayarın mikrofonu başlatılamadı. Ayarlar › Kamera ve Ses › Aramalar için mikrofon bölümünden başka birini seçin veya tekrar deneyin.</translation>
     </message>
+    <message>
+        <location filename="rust_strings.h" line="65"/>
+        <source>The PC couldn&apos;t play the call.</source>
+        <translation>Bilgisayar arama sesini çalamadı.</translation>
+    </message>
 </context>
 <context>
     <name>CallsPage</name>
@@ -6136,6 +6141,11 @@ Neler gerekir
         <location filename="../qml/pages/HomePage.qml" line="1"/>
         <source>Bluetooth: notifications, texts and calls</source>
         <translation>Bluetooth: bildirimler, mesajlar ve aramalar</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/HomePage.qml" line="2110"/>
+        <source>Ready to play calls</source>
+        <translation>Arama sesi çalmaya hazır</translation>
     </message>
 </context>
 <context>
