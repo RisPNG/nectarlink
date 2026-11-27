@@ -55,8 +55,7 @@ class NectarlinkApplication : Application(), DefaultLifecycleObserver {
         // Before Elevated: it waits while paused for a banking app.
         BankingPause.init(this)
         BankingPause.restoreIfStranded(this)
-        // The media volume, if the app stopped while the phone's sound played on the PC.
-        app.nectarlink.android.mirror.PhoneQuiet.end(this)
+        app.nectarlink.android.mirror.PhoneQuiet.restore(this)
         // The call volume, if it stopped while a call's sound was on a PC (#133).
         app.nectarlink.android.calls.CallEarpiece.end(this)
         Elevated.init(this)
