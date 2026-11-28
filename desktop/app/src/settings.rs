@@ -403,6 +403,10 @@ fn default_phone_sound_volume() -> u8 {
 
 static PHONE_SOUND_VOLUME: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(100);
 
+#[cfg(windows)]
+pub(crate) static PHONE_SOUND_OUTPUT: std::sync::LazyLock<tokio::sync::watch::Sender<Option<String>>> =
+    std::sync::LazyLock::new(|| tokio::sync::watch::channel(None).0);
+
 /// How loud a phone's sound plays here, `0..=100` of what it sends (#577).
 pub fn phone_sound_volume() -> u8 {
     PHONE_SOUND_VOLUME.load(std::sync::atomic::Ordering::Relaxed)
@@ -743,6 +747,9 @@ pub struct Settings {
     /// the slider under Phone sound on this PC, or the phone's volume keys.
     #[serde(default = "default_phone_sound_volume")]
     pub phone_sound_volume: u8,
+    /// The Windows playback endpoint for phone sound. `None` uses the system default.
+    #[serde(default)]
+    pub phone_sound_output: Option<String>,
     /// The battery level that counts as low, in percent (default 15).
     #[serde(default = "default_battery_low_threshold", alias = "battery_low_threshold")]
     pub battery_low_threshold: u8,
@@ -1059,6 +1066,7 @@ impl Default for Settings {
             battery_low_threshold: default_battery_low_threshold(),
             phone_sound_buffer_ms: default_sound_buffer_ms(),
             phone_sound_volume: default_phone_sound_volume(),
+            phone_sound_output: None,
             ui_scale: default_ui_scale(),
             keep_screen_off: Vec::new(),
             device_nicknames: std::collections::HashMap::new(),
@@ -1202,6 +1210,8 @@ impl Settings {
         set_battery_low_threshold(self.battery_low_threshold);
         set_phone_sound_buffer_ms(self.phone_sound_buffer_ms);
         set_phone_sound_volume(self.phone_sound_volume);
+        #[cfg(windows)]
+        PHONE_SOUND_OUTPUT.send_replace(self.phone_sound_output.clone());
         set_keep_screen_off_phones(self.keep_screen_off.clone());
         set_own_name(self.own_name.clone());
         set_device_nicknames(self.device_nicknames.clone());
@@ -1445,6 +1455,7 @@ mod tests {
             battery_low_threshold: 10,
             phone_sound_buffer_ms: 200,
             phone_sound_volume: 60,
+            phone_sound_output: Some("{0.0.0.00000000}.{output}".into()),
             ui_scale: 125,
             keep_screen_off: vec!["abc".to_owned()],
             device_nicknames: std::collections::HashMap::from([("abc".to_owned(), "Work phone".to_owned())]),
@@ -1535,6 +1546,7 @@ mod tests {
         let loaded = Settings::load(dir.path());
         assert_eq!(loaded.theme, Theme::Graphite);
         assert_eq!(loaded.seed, "wallpaper");
+        assert_eq!(loaded.phone_sound_output, None);
 
         fs::write(dir.path().join(FILE_NAME), "{ not json").unwrap();
         assert_eq!(Settings::load(dir.path()), Settings::default());

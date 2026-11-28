@@ -2118,6 +2118,7 @@ Item {
 
                     // The phone's sound out of this PC's speakers, without a mirror window.
                     SwitchBar {
+                        id: phoneSoundSwitch
                         readonly property string sound: MediaList.revision >= 0 ? MediaList.phoneSoundState(home.deviceId) : "off"
                         width: parent.width
                         visible: sound !== "off" || (home.online && home.feature("mirroring.sound").state === "available")
@@ -2128,6 +2129,18 @@ Item {
                             : sound === "asking" ? qsTr("Allow it on %1").arg(home.name)
                             : ""
                         onToggled: (on) => MediaList.setPhoneSound(home.deviceId, on)
+                    }
+
+                    Button {
+                        visible: Qt.platform.os === "windows" && phoneSoundSwitch.visible
+                        size: "sm"
+                        variant: "outline"
+                        iconPath: Icons.speaker
+                        text: qsTr("Phone sound output")
+                        onClicked: {
+                            phoneSoundOutputSheet.devices = JSON.parse(MediaList.phoneSoundOutputs())
+                            phoneSoundOutputSheet.open()
+                        }
                     }
 
                     // How loud it plays here, apart from the PC's own volume (#577).
@@ -2803,6 +2816,41 @@ Item {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    Sheet {
+        id: phoneSoundOutputSheet
+        cardWidth: 440
+        property var devices: []
+        readonly property string output: devices.some(device => device.id === Preferences.phoneSoundOutput)
+            ? Preferences.phoneSoundOutput : ""
+
+        Column {
+            width: parent.width
+            spacing: 12
+            Txt { width: parent.width; text: qsTr("Phone sound output"); role: "headline"; wrapMode: Text.WordWrap }
+            Repeater {
+                model: [{ id: "", name: qsTr("System default") }].concat(phoneSoundOutputSheet.devices)
+                delegate: Button {
+                    required property var modelData
+                    readonly property bool selected: modelData.id === phoneSoundOutputSheet.output
+                    width: parent.width
+                    variant: selected ? "tonal" : "text"
+                    iconPath: selected ? Icons.check : Icons.speaker
+                    text: modelData.name
+                    Accessible.checkable: true
+                    Accessible.checked: selected
+                    onClicked: {
+                        Preferences.choosePhoneSoundOutput(modelData.id)
+                        phoneSoundOutputSheet.close()
+                    }
+                }
+            }
+            Row {
+                anchors.right: parent.right
+                Button { variant: "text"; text: qsTr("Close"); onClicked: phoneSoundOutputSheet.close() }
             }
         }
     }

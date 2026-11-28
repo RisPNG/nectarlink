@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Playing a mirrored phone's sound on the PC's speakers: 16-bit PCM from
-//! the phone goes through a small jitter buffer to the default output
+//! the phone goes through a small jitter buffer to the selected output
 //! device (WASAPI, shared mode), on a thread of its own.
 //!
 //! The buffer favors low delay: playback starts once a few packets are in,
@@ -21,8 +21,8 @@ use windows::Win32::{
     Foundation::{CloseHandle, HANDLE},
     Media::Audio::{
         AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM, AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
-        AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY, IAudioClient, IAudioRenderClient, IMMDeviceEnumerator,
-        MMDeviceEnumerator, WAVE_FORMAT_PCM, WAVEFORMATEX, eConsole, eRender,
+        AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY, DEVICE_STATE_ACTIVE, IAudioClient, IAudioRenderClient,
+        IMMDevice, IMMDeviceEnumerator, MMDeviceEnumerator, WAVE_FORMAT_PCM, WAVEFORMATEX, eConsole, eRender,
     },
     System::{
         Com::{CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoUninitialize},
@@ -101,13 +101,13 @@ impl Player {
         let (queue, packets) = sync_channel(QUEUE);
         std::thread::Builder::new().name("mirror-sound".into()).spawn(move || {
             let mut attempts = 0;
-            // The device can go away (headphones unplugged): start over on
-            // the new default, a few times.
+            // The output can go away (headphones unplugged): reopen it, with
+            // the default as a fallback.
             while attempts < 5 {
                 match play(device.as_deref(), rate, channels, &packets) {
                     Ok(()) => return,
                     Err(e) => {
-                        tracing::warn!(error = %e, "the sound stopped; trying the default device again");
+                        tracing::warn!(error = %e, "the sound stopped; reopening the output");
                         attempts += 1;
                         std::thread::sleep(Duration::from_millis(300));
                     }
@@ -235,29 +235,39 @@ fn render(
     // GetBuffer and ReleaseBuffer.
     unsafe {
         let devices: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
-        let chosen = device.and_then(|id| devices.GetDevice(&windows::core::HSTRING::from(id)).ok());
-        let device = match chosen {
-            Some(device) => device,
-            None => devices.GetDefaultAudioEndpoint(eRender, eConsole)?,
+        let chosen = device
+            .and_then(|id| devices.GetDevice(&windows::core::HSTRING::from(id)).ok())
+            .filter(|device| device.GetState().ok() == Some(DEVICE_STATE_ACTIVE));
+        let open = |device: IMMDevice| -> windows::core::Result<(IAudioClient, IAudioRenderClient, u32)> {
+            let client: IAudioClient = device.Activate(CLSCTX_ALL, None)?;
+            // Windows converts the rate and channels to the device's own.
+            client.Initialize(
+                AUDCLNT_SHAREMODE_SHARED,
+                AUDCLNT_STREAMFLAGS_EVENTCALLBACK
+                    | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
+                    | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY,
+                (DEVICE_BUFFER.as_nanos() / 100) as i64,
+                0,
+                &format,
+                None,
+            )?;
+            client.SetEventHandle(event)?;
+            let size = client.GetBufferSize()?;
+            let output = client.GetService()?;
+            client.Start()?;
+            Ok((client, output, size))
         };
-        let client: IAudioClient = device.Activate(CLSCTX_ALL, None)?;
-        // Windows converts the rate and channels to the device's own.
-        client.Initialize(
-            AUDCLNT_SHAREMODE_SHARED,
-            AUDCLNT_STREAMFLAGS_EVENTCALLBACK
-                | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
-                | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY,
-            (DEVICE_BUFFER.as_nanos() / 100) as i64,
-            0,
-            &format,
-            None,
-        )?;
-        client.SetEventHandle(event)?;
-        let size = client.GetBufferSize()?;
-        let output: IAudioRenderClient = client.GetService()?;
+        let (client, output, size) = match chosen.map(open).transpose() {
+            Ok(Some(stream)) => stream,
+            fallback => {
+                if let Err(e) = fallback {
+                    tracing::warn!(error = %e, "can't open the selected sound output; using the default");
+                }
+                open(devices.GetDefaultAudioEndpoint(eRender, eConsole)?)?
+            }
+        };
         let mut jitter =
             Jitter::new(rate, channels, Sizes::for_buffer(crate::settings::phone_sound_buffer_ms()));
-        client.Start()?;
         tracing::debug!(rate, channels, frames = size, "playing a phone's sound");
         let result = loop {
             // Woken when the device wants sound (or after a while regardless,

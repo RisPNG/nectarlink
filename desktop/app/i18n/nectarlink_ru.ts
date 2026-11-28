@@ -5957,6 +5957,17 @@ What it needs
         <translation>Разрешите это на %1</translation>
     </message>
     <message>
+        <location filename="../qml/pages/HomePage.qml" line="2139"/>
+        <location filename="../qml/pages/HomePage.qml" line="2833"/>
+        <source>Phone sound output</source>
+        <translation>Вывод звука телефона</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/HomePage.qml" line="2835"/>
+        <source>System default</source>
+        <translation>Системный по умолчанию</translation>
+    </message>
+    <message>
         <location filename="../qml/pages/HomePage.qml" line="2126"/>
         <location filename="../qml/pages/HomePage.qml" line="2141"/>
         <source>Phone sound volume</source>
@@ -6353,6 +6364,7 @@ What it needs
     </message>
     <message>
         <location filename="../qml/pages/HomePage.qml" line="3971"/>
+        <location filename="../qml/pages/HomePage.qml" line="2853"/>
         <source>Close</source>
         <translation>Закрыть</translation>
     </message>

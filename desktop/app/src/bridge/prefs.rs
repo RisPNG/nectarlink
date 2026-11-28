@@ -109,6 +109,8 @@ pub mod qobject {
         #[qproperty(i32, battery_low_threshold)]
         /// How much of a phone's sound is held before it plays, in ms.
         #[qproperty(i32, phone_sound_buffer_ms)]
+        /// The playback endpoint for phone sound; empty means system default.
+        #[qproperty(QString, phone_sound_output, cxx_name = "phoneSoundOutput")]
         /// Goes up when an app is pinned or unpinned, so Apps reads the pins again.
         #[qproperty(i32, pins_revision, cxx_name = "pinsRevision")]
         /// How big the app draws, in percent. Takes effect after a restart.
@@ -233,6 +235,9 @@ pub mod qobject {
         #[qproperty(bool, window_maximized)]
         type Preferences = super::PreferencesRust;
 
+        #[qinvokable]
+        #[cxx_name = "choosePhoneSoundOutput"]
+        fn choose_phone_sound_output(self: Pin<&mut Preferences>, output: &QString);
         /// Resets the setup walkthrough to step 0 and opens it again.
         #[qinvokable]
         fn restart_walkthrough(self: Pin<&mut Preferences>);
@@ -464,6 +469,7 @@ pub struct PreferencesRust {
     battery_full_threshold: i32,
     battery_low_threshold: i32,
     phone_sound_buffer_ms: i32,
+    phone_sound_output: QString,
     pins_revision: i32,
     ui_scale: i32,
     recordings_folder: QString,
@@ -592,6 +598,9 @@ impl cxx_qt::Initialize for qobject::Preferences {
         self.as_mut().set_battery_full_threshold(i32::from(settings.battery_full_threshold));
         self.as_mut().set_battery_low_threshold(i32::from(settings.battery_low_threshold));
         self.as_mut().set_phone_sound_buffer_ms(i32::from(settings.phone_sound_buffer_ms));
+        self.as_mut().set_phone_sound_output(QString::from(
+            settings.phone_sound_output.as_deref().unwrap_or_default(),
+        ));
         self.as_mut().set_ui_scale(i32::from(settings.ui_scale));
         let start_effective = crate::startup::effective(settings.start_with_windows);
         self.as_mut().set_start_with_windows(start_effective);
@@ -1138,6 +1147,15 @@ impl qobject::Preferences {
         // in between.
     }
 
+    pub fn choose_phone_sound_output(mut self: Pin<&mut Self>, output: &QString) {
+        #[cfg(windows)]
+        crate::settings::PHONE_SOUND_OUTPUT.send_replace((!output.is_empty()).then(|| String::from(output)));
+        if self.phone_sound_output() != output {
+            self.as_mut().set_phone_sound_output(output.clone());
+            self.save();
+        }
+    }
+
     pub fn restart_walkthrough(mut self: Pin<&mut Self>) {
         self.as_mut().set_walkthrough_step(0);
         self.as_mut().set_walkthrough_completed(false);
@@ -1525,6 +1543,8 @@ impl qobject::Preferences {
             battery_low_threshold: p.battery_low_threshold.clamp(5, 50) as u8,
             phone_sound_buffer_ms: p.phone_sound_buffer_ms.clamp(20, 500) as u16,
             phone_sound_volume: crate::settings::phone_sound_volume(),
+            phone_sound_output: (!p.phone_sound_output.is_empty())
+                .then(|| String::from(&p.phone_sound_output)),
             ui_scale: u16::try_from(p.ui_scale).unwrap_or(100),
             keep_screen_off: crate::settings::keep_screen_off_phones(),
             device_nicknames: crate::settings::device_nicknames(),

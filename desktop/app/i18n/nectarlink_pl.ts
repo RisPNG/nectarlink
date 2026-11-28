@@ -5972,6 +5972,17 @@ Wymagania
         <translation>Zezwól na to na %1</translation>
     </message>
     <message>
+        <location filename="../qml/pages/HomePage.qml" line="2139"/>
+        <location filename="../qml/pages/HomePage.qml" line="2833"/>
+        <source>Phone sound output</source>
+        <translation>Wyjście dźwięku telefonu</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/HomePage.qml" line="2835"/>
+        <source>System default</source>
+        <translation>Domyślny systemowy</translation>
+    </message>
+    <message>
         <location filename="../qml/pages/HomePage.qml" line="2126"/>
         <location filename="../qml/pages/HomePage.qml" line="2141"/>
         <source>Phone sound volume</source>
@@ -6372,6 +6383,7 @@ Wymagania
     </message>
     <message>
         <location filename="../qml/pages/HomePage.qml" line="3971"/>
+        <location filename="../qml/pages/HomePage.qml" line="2853"/>
         <source>Close</source>
         <translation>Zamknij</translation>
     </message>
