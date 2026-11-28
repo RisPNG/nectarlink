@@ -23,6 +23,7 @@ import androidx.core.content.IntentCompat
 import app.nectarlink.android.NectarlinkApplication
 import app.nectarlink.android.R
 import app.nectarlink.android.elevated.AppDisplay
+import app.nectarlink.android.elevated.Elevated
 import app.nectarlink.android.elevated.ElevatedDisplayStream
 import app.nectarlink.services.client.NectarlinkServiceContract
 import kotlinx.coroutines.CoroutineScope
@@ -98,6 +99,7 @@ class MirrorService : Service() {
         stayAwake = intent.getBooleanExtra(EXTRA_STAY_AWAKE, false)
         screenOff = intent.getBooleanExtra(EXTRA_SCREEN_OFF, false)
         soundOnly = intent.getBooleanExtra(EXTRA_SOUND_ONLY, false)
+        val keepSoundOnPhone = soundOnly && intent.getBooleanExtra(EXTRA_KEEP_SOUND_ON_PHONE, false)
 
         if (isElevated) {
             val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE else 0
@@ -113,7 +115,7 @@ class MirrorService : Service() {
                 soundOnly = soundOnly,
             )
             if (soundOnly) {
-                scope.launch { startSound(core, pc) }
+                scope.launch { startSound(core, pc, keepSoundOnPhone) }
                 return START_NOT_STICKY
             }
             val fallbackRequest = MirrorRequest(pc, maxSize, fps, bitrate, audio, stayAwake, screenOff)
@@ -150,7 +152,6 @@ class MirrorService : Service() {
             override fun onStop() = main.post { stopSharing() }.let {}
         }, main)
         if (soundOnly) {
-            val keepSoundOnPhone = intent.getBooleanExtra(EXTRA_KEEP_SOUND_ON_PHONE, false)
             scope.launch { startSound(core, pc, keepSoundOnPhone) }
             return START_NOT_STICKY
         }
@@ -387,12 +388,14 @@ class MirrorService : Service() {
                 endSharing()
                 return@post
             }
-            val capture = SoundCapture(running, stream, allowElevated = !keepSoundOnPhone) {
-                // Some phones refuse the helper's capture. Screen-capture consent
-                // still works. Not when this was stopped on purpose: `sound` is gone then.
-                val current = sound
-                if (soundOnly && running == null && current != null && !current.sentSound) askForSound(pc)
-                endSharing()
+            lateinit var capture: SoundCapture
+            capture = SoundCapture(running, stream, keepSoundOnPhone = keepSoundOnPhone) {
+                main.post ended@{
+                    if (sound !== capture || !soundOnly) return@ended
+                    val needsConsent = running == null && !capture.sentSound
+                    stopSharing()
+                    if (needsConsent) askForSound(pc, keepSoundOnPhone)
+                }
             }
             sound = capture
             capture.start()
@@ -405,8 +408,8 @@ class MirrorService : Service() {
         }
     }
 
-    private fun askForSound(pc: String) {
-        val request = MirrorRequest(pc, 1280, 30, 4_000_000, audio = true, soundOnly = true)
+    private fun askForSound(pc: String, keepSoundOnPhone: Boolean) {
+        val request = MirrorRequest(pc, 1280, 30, 4_000_000, audio = true, soundOnly = true, keepSoundOnPhone = keepSoundOnPhone)
         MirrorRequests.show(this, request, "")
     }
 
@@ -518,8 +521,9 @@ class MirrorService : Service() {
          * the Elevated shell helper, without a `MediaProjection` consent prompt.
          */
         fun startElevated(context: Context, request: MirrorRequest): Boolean {
-            if (request.keepSoundOnPhone ||
-                !app.nectarlink.android.elevated.Elevated.hasCapability(NectarlinkServiceContract.CAP_SCREEN_MIRROR) ||
+            val capability = if (request.soundOnly) NectarlinkServiceContract.CAP_DEVICE_AUDIO else NectarlinkServiceContract.CAP_SCREEN_MIRROR
+            if ((request.keepSoundOnPhone && !Elevated.canKeepAudioOnPhone()) ||
+                !Elevated.hasCapability(capability) ||
                 current != null
             ) {
                 return false
@@ -534,6 +538,7 @@ class MirrorService : Service() {
                 .putExtra(EXTRA_STAY_AWAKE, request.stayAwake)
                 .putExtra(EXTRA_SCREEN_OFF, request.screenOff)
                 .putExtra(EXTRA_SOUND_ONLY, request.soundOnly)
+                .putExtra(EXTRA_KEEP_SOUND_ON_PHONE, request.keepSoundOnPhone)
             return runCatching {
                 ContextCompat.startForegroundService(context, intent)
                 true
