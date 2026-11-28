@@ -6043,6 +6043,16 @@ O que precisa
         <translation>Som do celular neste PC</translation>
     </message>
     <message>
+        <location filename="../qml/pages/HomePage.qml" line="2153"/>
+        <source>Keep sound playing on the phone</source>
+        <translation>Continuar reproduzindo o som no celular</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/HomePage.qml" line="2154"/>
+        <source>Applies to the next session</source>
+        <translation>Vale a partir da próxima sessão</translation>
+    </message>
+    <message>
         <location filename="../qml/pages/HomePage.qml" line="2089"/>
         <source>Playing %1&apos;s sound</source>
         <translation>Tocando o som de %1</translation>

@@ -21,6 +21,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
 import app.nectarlink.android.elevated.Elevated
+import app.nectarlink.android.mirror.PhoneSoundPlayback
 import app.nectarlink.android.webcam.WebcamService
 import app.nectarlink.core.PhoneToggleValue
 import app.nectarlink.core.PhoneToggles as CorePhoneToggles
@@ -55,7 +56,7 @@ class PhoneToggles(
     @Volatile private var torchOn: Boolean = false
     private var started = false
     private var lastSent: CorePhoneToggles? = null
-    private var webcamWatch: Job? = null
+    private var stateWatch: Job? = null
 
     private val emitRunnable = Runnable { pushIfChanged() }
     private val followUpRunnable = Runnable { pushIfChanged() }
@@ -116,7 +117,8 @@ class PhoneToggles(
         // The flashlight follows the webcam while it streams, so the PC hears when
         // the webcam starts, stops or switches its torch. Without this the PC kept
         // showing a torch from the last webcam session as on (#353).
-        webcamWatch = CoroutineScope(Dispatchers.Main).launch {
+        stateWatch = CoroutineScope(Dispatchers.Main).launch {
+            launch { PhoneSoundPlayback.state(context).collect { schedulePush() } }
             WebcamService.session
                 .map { Triple(it.active, it.hasFlash, it.torchOn) }
                 .distinctUntilChanged()
@@ -131,8 +133,8 @@ class PhoneToggles(
         started = false
         mainHandler.removeCallbacks(emitRunnable)
         mainHandler.removeCallbacks(followUpRunnable)
-        webcamWatch?.cancel()
-        webcamWatch = null
+        stateWatch?.cancel()
+        stateWatch = null
         if (torchCameraId != null) {
             runCatching { camera?.unregisterTorchCallback(torchCallback) }
         }
@@ -145,6 +147,7 @@ class PhoneToggles(
         add("toggles.read")
         add("toggles.ringer")
         add("toggles.volume")
+        if (PhoneSoundPlayback.supported) add("toggles.keep_sound_on_phone")
         if (torchCameraId != null) add("toggles.flashlight")
         if (canChangeDnd(context)) add("toggles.dnd")
         if (canChangeBrightness(context)) add("toggles.brightness")
@@ -163,6 +166,7 @@ class PhoneToggles(
         brightness = readBrightness().toUByte(),
         wifi = readWifi(),
         bluetooth = readBluetooth(),
+        keepSoundOnPhone = if (PhoneSoundPlayback.supported) PhoneSoundPlayback.keepOnPhone(context) else null,
     )
 
     /** Forces an immediate snapshot push to `nectarlink-core`. */
@@ -208,6 +212,12 @@ class PhoneToggles(
                 "hotspot" -> {
                     val on = (value as? PhoneToggleValue.Bool)?.on ?: return false
                     Elevated.runCommand(if (on) "hotspot on" else "hotspot off")
+                }
+                "keep_sound_on_phone" -> {
+                    val on = (value as? PhoneToggleValue.Bool)?.on ?: return false
+                    if (!PhoneSoundPlayback.supported) return false
+                    PhoneSoundPlayback.setKeepOnPhone(context, on)
+                    true
                 }
                 "pc_active" -> {
                     val on = (value as? PhoneToggleValue.Bool)?.on ?: return false

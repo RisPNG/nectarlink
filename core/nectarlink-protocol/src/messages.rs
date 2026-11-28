@@ -4018,6 +4018,7 @@ pub mod toggles {
     pub const BRIGHTNESS: &str = "toggles.brightness";
     pub const WIFI: &str = "toggles.wifi";
     pub const BLUETOOTH: &str = "toggles.bluetooth";
+    pub const KEEP_SOUND_ON_PHONE: &str = "toggles.keep_sound_on_phone";
     pub const SHOW: &str = "toggles.show";
 }
 
@@ -4032,8 +4033,19 @@ pub mod toggle_ids {
     pub const BLUETOOTH: &str = "bluetooth";
     pub const HOTSPOT: &str = "hotspot";
     pub const PC_ACTIVE: &str = "pc_active";
-    pub const ALL: &[&str] =
-        &[DND, RINGER, FLASHLIGHT, VOLUME, BRIGHTNESS, WIFI, BLUETOOTH, HOTSPOT, PC_ACTIVE];
+    pub const KEEP_SOUND_ON_PHONE: &str = "keep_sound_on_phone";
+    pub const ALL: &[&str] = &[
+        DND,
+        RINGER,
+        FLASHLIGHT,
+        VOLUME,
+        BRIGHTNESS,
+        WIFI,
+        BLUETOOTH,
+        HOTSPOT,
+        PC_ACTIVE,
+        KEEP_SOUND_ON_PHONE,
+    ];
 }
 
 /// Ringer modes for [`PhoneToggles::ringer`] and `phone.toggle.set` (`id = "ringer"`).
@@ -4059,6 +4071,9 @@ pub struct PhoneToggles {
     pub brightness: u8,
     pub wifi: bool,
     pub bluetooth: bool,
+    /// Whether the next standalone phone sound session keeps local playback.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keep_sound_on_phone: Option<bool>,
 }
 
 impl PhoneToggles {
@@ -4107,7 +4122,8 @@ impl PhoneToggleSet {
                 | toggle_ids::WIFI
                 | toggle_ids::BLUETOOTH
                 | toggle_ids::HOTSPOT
-                | toggle_ids::PC_ACTIVE,
+                | toggle_ids::PC_ACTIVE
+                | toggle_ids::KEEP_SOUND_ON_PHONE,
                 PhoneToggleValue::Bool(_),
             ) => true,
             (toggle_ids::VOLUME | toggle_ids::BRIGHTNESS, PhoneToggleValue::Level(n)) => *n <= 100,
@@ -6679,6 +6695,7 @@ name"
             brightness: 50,
             wifi: true,
             bluetooth: true,
+            keep_sound_on_phone: Some(false),
         };
         assert!(state.is_valid());
         let env = Envelope::new(types::PHONE_TOGGLES, &state).unwrap();
@@ -6692,6 +6709,13 @@ name"
         let back: PhoneToggles = Envelope::from_cbor(&env.to_cbor()).unwrap().body().unwrap();
         assert_eq!(back, no_flash);
 
+        // Older or unsupported phones omit the playback preference.
+        let unsupported = PhoneToggles { keep_sound_on_phone: None, ..state.clone() };
+        let env = Envelope::new(types::PHONE_TOGGLES, &unsupported).unwrap();
+        assert!(!format!("{:?}", env.b).contains(toggle_ids::KEEP_SOUND_ON_PHONE));
+        let back: PhoneToggles = Envelope::from_cbor(&env.to_cbor()).unwrap().body().unwrap();
+        assert_eq!(back, unsupported);
+
         // Invalid ringer mode is rejected; out-of-range volume/brightness clamp in sanitized().
         assert!(!PhoneToggles { ringer: "loud".into(), ..state.clone() }.is_valid());
         assert_eq!(PhoneToggles { ringer: "loud".into(), ..state.clone() }.sanitized(), None);
@@ -6699,7 +6723,13 @@ name"
         assert_eq!(PhoneToggles { volume: 120, brightness: 200, ..state }.sanitized().unwrap().volume, 100);
 
         // `phone.toggle.set` validation for every toggle ID and value kind.
-        for id in [toggle_ids::DND, toggle_ids::FLASHLIGHT, toggle_ids::WIFI, toggle_ids::BLUETOOTH] {
+        for id in [
+            toggle_ids::DND,
+            toggle_ids::FLASHLIGHT,
+            toggle_ids::WIFI,
+            toggle_ids::BLUETOOTH,
+            toggle_ids::KEEP_SOUND_ON_PHONE,
+        ] {
             let set = PhoneToggleSet { id: id.into(), value: PhoneToggleValue::Bool(true) };
             assert!(set.is_valid(), "{id}");
             let env = Envelope::new(types::PHONE_TOGGLE_SET, &set).unwrap();

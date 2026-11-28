@@ -203,6 +203,7 @@ async fn photos_storage_and_quick_settings_through_the_gateway() {
             brightness: 60,
             wifi: true,
             bluetooth: false,
+            keep_sound_on_phone: None,
         })
         .await
         .unwrap();

@@ -5981,6 +5981,16 @@ Qué necesitas
         <translation>Sonido del teléfono en este PC</translation>
     </message>
     <message>
+        <location filename="../qml/pages/HomePage.qml" line="2153"/>
+        <source>Keep sound playing on the phone</source>
+        <translation>Seguir reproduciendo el sonido en el teléfono</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/HomePage.qml" line="2154"/>
+        <source>Applies to the next session</source>
+        <translation>Se aplica en la próxima sesión</translation>
+    </message>
+    <message>
         <location filename="../qml/pages/HomePage.qml" line="2089"/>
         <source>Playing %1&apos;s sound</source>
         <translation>Reproduciendo el sonido de %1</translation>

@@ -4753,8 +4753,8 @@ async fn voice_recordings_arrive_with_markers_and_respect_capability_and_toggle(
 async fn phone_toggles_arrive_on_connect_change_and_respect_capabilities_and_toggle() {
     use nectarlink_core::{
         PhoneToggleValue, PhoneToggles, TOGGLES_BLUETOOTH, TOGGLES_BRIGHTNESS, TOGGLES_DND,
-        TOGGLES_FLASHLIGHT, TOGGLES_READ, TOGGLES_RINGER, TOGGLES_SHOW, TOGGLES_VOLUME, TOGGLES_WIFI,
-        ringer_modes, toggle_ids,
+        TOGGLES_FLASHLIGHT, TOGGLES_KEEP_SOUND_ON_PHONE, TOGGLES_READ, TOGGLES_RINGER, TOGGLES_SHOW,
+        TOGGLES_VOLUME, TOGGLES_WIFI, ringer_modes, toggle_ids,
     };
 
     let mut pc = device_with("Desktop", DeviceKind::Desktop, &[TOGGLES_SHOW]).await;
@@ -4773,6 +4773,7 @@ async fn phone_toggles_arrive_on_connect_change_and_respect_capabilities_and_tog
         brightness: 40,
         wifi: true,
         bluetooth: true,
+        keep_sound_on_phone: None,
     };
     phone.node.toggles_changed(initial.clone()).await.unwrap();
 
@@ -4835,6 +4836,12 @@ async fn phone_toggles_arrive_on_connect_change_and_respect_capabilities_and_tog
         pc.node.set_phone_toggle(phone_id, toggle_ids::WIFI.into(), PhoneToggleValue::Bool(false)).await,
         Err(Error::Unsupported)
     ));
+    assert!(matches!(
+        pc.node
+            .set_phone_toggle(phone_id, toggle_ids::KEEP_SOUND_ON_PHONE.into(), PhoneToggleValue::Bool(true))
+            .await,
+        Err(Error::Unsupported)
+    ));
 
     // Invalid IDs or out-of-range values are rejected as protocol errors.
     assert!(matches!(
@@ -4861,6 +4868,7 @@ async fn phone_toggles_arrive_on_connect_change_and_respect_capabilities_and_tog
                 TOGGLES_BRIGHTNESS.into(),
                 TOGGLES_WIFI.into(),
                 TOGGLES_BLUETOOTH.into(),
+                TOGGLES_KEEP_SOUND_ON_PHONE.into(),
             ],
         )
         .await;
@@ -4902,6 +4910,16 @@ async fn phone_toggles_arrive_on_connect_change_and_respect_capabilities_and_tog
     )
     .await
     .unwrap();
+    with_timeout(
+        "keep phone sound playing",
+        pc.node.set_phone_toggle(
+            phone_id,
+            toggle_ids::KEEP_SOUND_ON_PHONE.into(),
+            PhoneToggleValue::Bool(true),
+        ),
+    )
+    .await
+    .unwrap();
 
     let recorded = phone.platform.phone_toggles.lock().unwrap().clone();
     assert_eq!(
@@ -4914,6 +4932,7 @@ async fn phone_toggles_arrive_on_connect_change_and_respect_capabilities_and_tog
             (toggle_ids::DND.into(), PhoneToggleValue::Bool(true)),
             (toggle_ids::BRIGHTNESS.into(), PhoneToggleValue::Level(90)),
             (toggle_ids::WIFI.into(), PhoneToggleValue::Bool(false)),
+            (toggle_ids::KEEP_SOUND_ON_PHONE.into(), PhoneToggleValue::Bool(true)),
         ]
     );
 
@@ -4926,6 +4945,7 @@ async fn phone_toggles_arrive_on_connect_change_and_respect_capabilities_and_tog
         brightness: 90,
         wifi: false,
         bluetooth: true,
+        keep_sound_on_phone: Some(true),
     };
     phone.node.toggles_changed(updated.clone()).await.unwrap();
     let got_updated = wait_for(&mut pc, "updated toggles", |e| match e {
@@ -4941,6 +4961,12 @@ async fn phone_toggles_arrive_on_connect_change_and_respect_capabilities_and_tog
     phone.node.set_device_toggle(pc_id, "toggles", false).unwrap();
     assert!(matches!(
         pc.node.set_phone_toggle(phone_id, toggle_ids::VOLUME.into(), PhoneToggleValue::Level(50)).await,
+        Err(Error::Denied)
+    ));
+    assert!(matches!(
+        pc.node
+            .set_phone_toggle(phone_id, toggle_ids::KEEP_SOUND_ON_PHONE.into(), PhoneToggleValue::Bool(false))
+            .await,
         Err(Error::Denied)
     ));
 }

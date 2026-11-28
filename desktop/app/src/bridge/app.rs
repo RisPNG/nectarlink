@@ -15,7 +15,9 @@ use cxx_qt::{CxxQtThread, CxxQtType, Threading};
 use cxx_qt_lib::{
     QHash, QHashPair_QString_QVariant, QList, QMap, QMapPair_QString_QVariant, QString, QStringList, QVariant,
 };
-use nectarlink_core::{DeviceId, Error, FeatureState, LinkState, PhoneToggleValue, features::Upgrade};
+use nectarlink_core::{
+    DeviceId, Error, FeatureState, LinkState, PhoneToggleValue, features::Upgrade, toggle_ids,
+};
 
 use crate::{
     core_host,
@@ -315,9 +317,14 @@ pub mod qobject {
         fn phone_toggles(self: &AppController, device: &QString) -> QString;
         /// Changes one quick settings toggle on a phone (`id`: `"dnd"`,
         /// `"ringer"`, `"flashlight"`, `"volume"`, `"brightness"`, `"wifi"`,
-        /// `"bluetooth"`).
+        /// `"bluetooth"`). Returns whether a request was started.
         #[qinvokable]
-        fn set_phone_toggle(self: Pin<&mut AppController>, device: &QString, id: &QString, value: &QString);
+        fn set_phone_toggle(
+            self: Pin<&mut AppController>,
+            device: &QString,
+            id: &QString,
+            value: &QString,
+        ) -> bool;
 
         /// Sends what's copied on this PC to a device.
         #[qinvokable]
@@ -484,6 +491,10 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "phoneToggleFailed"]
         fn phone_toggle_failed(self: Pin<&mut AppController>, device: QString, id: QString);
+        /// The phone applied its local playback preference.
+        #[qsignal]
+        #[cxx_name = "phoneSoundPreferenceApplied"]
+        fn phone_sound_preference_applied(self: Pin<&mut AppController>, device: QString);
         /// A short message with a context action chip (e.g. a received clip).
         #[qsignal]
         fn toast_with_action(self: Pin<&mut AppController>, message: QString, action_label: QString);
@@ -2111,20 +2122,25 @@ impl qobject::AppController {
         QString::from(&json)
     }
 
-    pub fn set_phone_toggle(self: Pin<&mut Self>, device: &QString, id: &QString, value: &QString) {
-        let (Some(device), Some(node)) = (super::parse_device(device), core_host::node()) else { return };
+    pub fn set_phone_toggle(self: Pin<&mut Self>, device: &QString, id: &QString, value: &QString) -> bool {
+        let (Some(device), Some(node)) = (super::parse_device(device), core_host::node()) else {
+            return false;
+        };
         let id = String::from(id);
         let raw = String::from(value);
         let parsed = match id.as_str() {
             "dnd" | "flashlight" | "wifi" | "bluetooth" | "hotspot" | "pc_active" => {
                 Some(PhoneToggleValue::Bool(raw == "true"))
             }
+            toggle_ids::KEEP_SOUND_ON_PHONE => raw.parse::<bool>().ok().map(PhoneToggleValue::Bool),
             "volume" | "brightness" => raw.parse::<u8>().ok().map(|v| PhoneToggleValue::Level(v.min(100))),
             "ringer" => Some(PhoneToggleValue::Mode(raw)),
             _ => None,
         };
-        let Some(val) = parsed else { return };
+        let Some(val) = parsed else { return false };
+        let playback_preference = id == toggle_ids::KEEP_SOUND_ON_PHONE;
         // Optimistically update local state so buttons and sliders don't snap back while the RPC runs.
+        // The playback preference has no optimistic update since it affects the next stream request.
         core_host::host().hub.update(|s| {
             let Some(t) = s.toggles.get(&device).cloned() else { return Changes::NONE };
             let mut next = t;
@@ -2147,6 +2163,11 @@ impl qobject::AppController {
             match node.set_phone_toggle(device, id, val).await {
                 // The phone's hotspot is on: join it, when a network is set for it.
                 Ok(()) if hotspot_on => crate::hotspot::hotspot_turned_on(device),
+                Ok(()) if playback_preference => {
+                    let _ = qt.queue(move |mut object| {
+                        object.as_mut().phone_sound_preference_applied(QString::from(&device.to_string()));
+                    });
+                }
                 Ok(()) => {}
                 Err(e) => {
                     let latest = node.phone_toggles(device);
@@ -2161,6 +2182,7 @@ impl qobject::AppController {
                 }
             }
         });
+        true
     }
 
     pub fn check_for_updates(mut self: Pin<&mut Self>) {

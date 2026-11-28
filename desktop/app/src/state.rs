@@ -1656,6 +1656,7 @@ mod tests {
             brightness: 70,
             wifi: true,
             bluetooth: true,
+            keep_sound_on_phone: Some(false),
         };
         assert_eq!(
             s.apply(&NodeEvent::PhoneToggles { device: phone, toggles: toggles.clone() }),

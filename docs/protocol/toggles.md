@@ -20,6 +20,7 @@ the capability matrix's reason for what unlocks them.
 | `toggles.brightness` | phone | Basic + Modify system settings (or Elevated) | Changes the screen brightness (`0..=100`) |
 | `toggles.wifi` | phone | Elevated | Turns Wi-Fi on or off |
 | `toggles.bluetooth` | phone | Elevated | Turns Bluetooth on or off |
+| `toggles.keep_sound_on_phone` | phone | Android 10 or newer | Sets whether the next standalone phone sound session also plays eligible media on the phone |
 | `toggles.show` | desktop | None | Shows a phone's controls and sends `phone.toggle.set` requests |
 
 A phone sends `phone.toggles` only to desktops that offer `toggles.show`,
@@ -51,6 +52,7 @@ PhoneToggles = {
   wifi:        bool,          // Wi-Fi is on
   bluetooth:   bool,          // Bluetooth is on
   hotspot?:    bool,          // Wi-Fi hotspot / tethering is on
+  keep_sound_on_phone?: bool, // omitted by phones without this preference
 }
 ```
 
@@ -68,6 +70,7 @@ Asks the phone to change one toggle:
 | `"wifi"` | `bool` | `toggles.wifi` |
 | `"hotspot"` | `bool` | `toggles.wifi` |
 | `"bluetooth"` | `bool` | `toggles.bluetooth` |
+| `"keep_sound_on_phone"` | `bool` | `toggles.keep_sound_on_phone` |
 | `"pc_active"` | `bool` | `toggles.read` (presence hint for silencing notifications while active at the PC; exempt from the `toggles` device toggle) |
 
 Errors:
@@ -78,6 +81,9 @@ Errors:
 
 ## 3. Rules
 
+- **Phone sound playback.** A phone shares this preference only when it
+  supports keeping local playback. The preference takes effect the next time
+  a standalone phone sound session starts.
 - **Confirm turning Wi-Fi off.** Turning Wi-Fi off from the PC can sever the
   LAN connection between the PC and the phone; the PC UI confirms with the
   user before sending `phone.toggle.set { id: "wifi", value: false }`.

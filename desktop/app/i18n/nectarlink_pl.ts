@@ -5998,6 +5998,16 @@ Wymagania
         <translation>Dźwięk telefonu na tym komputerze</translation>
     </message>
     <message>
+        <location filename="../qml/pages/HomePage.qml" line="2153"/>
+        <source>Keep sound playing on the phone</source>
+        <translation>Nadal odtwarzaj dźwięk na telefonie</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/HomePage.qml" line="2154"/>
+        <source>Applies to the next session</source>
+        <translation>Obowiązuje od następnej sesji</translation>
+    </message>
+    <message>
         <location filename="../qml/pages/HomePage.qml" line="2089"/>
         <source>Playing %1&apos;s sound</source>
         <translation>Odtwarzanie dźwięku z %1</translation>

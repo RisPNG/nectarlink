@@ -6056,6 +6056,16 @@ What it needs
         <translation>在此电脑上播放手机声音</translation>
     </message>
     <message>
+        <location filename="../qml/pages/HomePage.qml" line="2153"/>
+        <source>Keep sound playing on the phone</source>
+        <translation>继续在手机上播放声音</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/HomePage.qml" line="2154"/>
+        <source>Applies to the next session</source>
+        <translation>在下次共享时生效</translation>
+    </message>
+    <message>
         <location filename="../qml/pages/HomePage.qml" line="2089"/>
         <source>Playing %1&apos;s sound</source>
         <translation>正在播放 %1 的声音</translation>

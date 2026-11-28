@@ -1155,7 +1155,7 @@ fun SettingsScreen(
                     SettingRowDivider()
                     if (PhoneSoundPlayback.supported) {
                         val context = LocalContext.current
-                        var keepOnPhone by remember { mutableStateOf(PhoneSoundPlayback.keepOnPhone(context)) }
+                        val keepOnPhone by PhoneSoundPlayback.state(context).collectAsStateWithLifecycle()
                         val keepOnPhoneTitle = stringResource(R.string.settings_phone_sound_keep_on_phone)
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                             Column(Modifier.weight(1f).padding(end = 12.dp)) {
@@ -1168,10 +1168,7 @@ fun SettingsScreen(
                             }
                             Switch(
                                 checked = keepOnPhone,
-                                onCheckedChange = {
-                                    PhoneSoundPlayback.setKeepOnPhone(context, it)
-                                    keepOnPhone = it
-                                },
+                                onCheckedChange = { PhoneSoundPlayback.setKeepOnPhone(context, it) },
                                 colors = app.nectarlink.android.ui.theme.nectarSwitchColors(),
                                 modifier = Modifier.semantics { contentDescription = keepOnPhoneTitle },
                             )

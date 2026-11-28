@@ -6056,6 +6056,16 @@ Neler gerekir
         <translation>Bu bilgisayarda telefon sesi</translation>
     </message>
     <message>
+        <location filename="../qml/pages/HomePage.qml" line="2153"/>
+        <source>Keep sound playing on the phone</source>
+        <translation>Sesi telefonda da çalmaya devam et</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/HomePage.qml" line="2154"/>
+        <source>Applies to the next session</source>
+        <translation>Bir sonraki oturumda geçerli</translation>
+    </message>
+    <message>
         <location filename="../qml/pages/HomePage.qml" line="2089"/>
         <source>Playing %1&apos;s sound</source>
         <translation>%1 cihazının sesi çalınıyor</translation>
