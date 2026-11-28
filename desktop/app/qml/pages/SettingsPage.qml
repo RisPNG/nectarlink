@@ -2752,6 +2752,29 @@ Item {
                                 }
                             }
                         }
+                        ListRow {
+                            width: parent.width
+                            iconPath: Icons.speaker
+                            title: callOutputSheet.title
+                            description: callOutputSheet.output.name
+                            Component.onCompleted: PhoneCall.refreshCallOutputs()
+                            Button {
+                                variant: "outline"
+                                size: "sm"
+                                text: qsTr("Output")
+                                onClicked: callOutputSheet.openForCalls()
+                            }
+                        }
+                        ListRow {
+                            width: parent.width
+                            iconPath: Icons.speaker
+                            title: callVolumeSlider.label
+                            description: callVolumeSlider.valueText
+                            CallVolumeSlider {
+                                id: callVolumeSlider
+                                width: 200
+                            }
+                        }
                     }
                 }
             }
@@ -5049,6 +5072,8 @@ Item {
             }
         }
     }
+
+    CallOutputSheet { id: callOutputSheet }
 
     Sheet {
         id: callMicSheet

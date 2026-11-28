@@ -1224,7 +1224,7 @@ impl qobject::Preferences {
             self.as_mut().set_window_maximized(maximized);
         }
         let settings = self.current_settings();
-        let _ = settings.save(&core_host::host().data_dir);
+        let _ = settings.save_preferences(&core_host::host().data_dir);
     }
 
     pub fn obs_port(&self) -> i32 {
@@ -1560,6 +1560,8 @@ impl qobject::Preferences {
             phone_mic_output: crate::phone_mic::chosen_output(),
             phone_mic_gain: crate::phone_mic::gain(),
             call_mic: crate::call_audio::chosen_mic(),
+            call_output: crate::call_audio::chosen_output(),
+            call_playback_volume: crate::call_audio::volume(),
             timeline_retention_days: p.timeline_retention_days.max(0) as u32,
             continuity_photo_hotkey: String::from(&p.continuity_photo_hotkey),
             continuity_scan_hotkey: String::from(&p.continuity_scan_hotkey),
@@ -1646,7 +1648,7 @@ fn save_in_background(settings: Settings) {
         if *written > seq {
             return; // A newer save already ran.
         }
-        if let Err(e) = settings.save(&core_host::host().data_dir) {
+        if let Err(e) = settings.save_preferences(&core_host::host().data_dir) {
             tracing::warn!(error = %e, "can't save preferences");
         } else {
             crate::local_api::sync_from_settings();

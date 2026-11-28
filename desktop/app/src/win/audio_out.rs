@@ -17,6 +17,7 @@ use std::{
     time::Duration,
 };
 
+use tokio::sync::watch;
 use windows::Win32::{
     Foundation::{CloseHandle, HANDLE},
     Media::Audio::{
@@ -123,6 +124,39 @@ impl Player {
         if let Err(TrySendError::Full(_)) = self.queue.try_send(data) {
             tracing::debug!("a sound packet was dropped");
         }
+    }
+}
+
+/// Plays one PCM stream and follows its selected output without reopening the source.
+pub(crate) struct RoutedPlayer {
+    output: watch::Receiver<Option<String>>,
+    rate: u32,
+    channels: u16,
+    player: Player,
+}
+
+impl RoutedPlayer {
+    pub(crate) fn start(
+        mut output: watch::Receiver<Option<String>>,
+        rate: u32,
+        channels: u16,
+    ) -> std::io::Result<Self> {
+        let player = match output.borrow_and_update().clone() {
+            None => Player::start(rate, channels),
+            selected => Player::start_on(selected, rate, channels),
+        }?;
+        Ok(Self { output, rate, channels, player })
+    }
+
+    pub(crate) fn push(&mut self, data: Vec<u8>) {
+        if self.output.has_changed().unwrap_or_default() {
+            let endpoint = self.output.borrow_and_update().clone();
+            match Player::start_on(endpoint, self.rate, self.channels) {
+                Ok(player) => self.player = player,
+                Err(error) => tracing::warn!(%error, "can't move the audio to another output"),
+            }
+        }
+        self.player.push(data);
     }
 }
 

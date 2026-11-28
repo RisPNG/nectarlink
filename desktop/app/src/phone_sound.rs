@@ -22,8 +22,10 @@ use crate::{
     core_host,
     i18n::tr,
     state::{AppState, Changes},
-    win::audio_out::Player,
 };
+
+#[cfg(not(windows))]
+use crate::win::audio_out::Player;
 
 /// How long the phone's prompt may go unanswered.
 const ASK_TIMEOUT: Duration = Duration::from_secs(120);
@@ -135,62 +137,39 @@ fn gain(level: u8) -> f32 {
     x * x
 }
 
-/// Applies the phone sound level to the PCM for media and routed calls.
-pub(crate) fn apply_volume(data: &mut [u8]) {
-    scale(data, crate::settings::phone_sound_volume());
-}
-
 pub(crate) struct Playback {
+    #[cfg(windows)]
+    player: crate::win::audio_out::RoutedPlayer,
+    #[cfg(not(windows))]
     player: Player,
-    #[cfg(windows)]
-    format: MirrorAudioConfig,
-    #[cfg(windows)]
-    output: tokio::sync::watch::Receiver<Option<String>>,
 }
 
 impl Playback {
     pub(crate) fn start(format: MirrorAudioConfig) -> Option<Self> {
-        #[cfg(windows)]
-        let mut output = crate::settings::PHONE_SOUND_OUTPUT.subscribe();
-        #[cfg(windows)]
-        let device = output.borrow_and_update().clone();
-        #[cfg(not(windows))]
-        let device = None;
-        Some(Self {
-            player: Self::open(&format, device)?,
-            #[cfg(windows)]
-            format,
-            #[cfg(windows)]
-            output,
-        })
-    }
-
-    fn open(format: &MirrorAudioConfig, device: Option<String>) -> Option<Player> {
         let channels = u16::from(format.channels);
-        match device {
-            None => Player::start(format.rate, channels),
-            device => Player::start_on(device, format.rate, channels),
-        }
-        .inspect_err(|e| tracing::warn!(error = %e, "can't play the phone's sound"))
-        .ok()
+        #[cfg(windows)]
+        let player = crate::win::audio_out::RoutedPlayer::start(
+            crate::settings::PHONE_SOUND_OUTPUT.subscribe(),
+            format.rate,
+            channels,
+        );
+        #[cfg(not(windows))]
+        let player = Player::start(format.rate, channels);
+        player
+            .inspect_err(|e| tracing::warn!(error = %e, "can't play the phone's sound"))
+            .ok()
+            .map(|player| Self { player })
     }
 
     pub(crate) fn push(&mut self, mut data: Vec<u8>) {
-        #[cfg(windows)]
-        if self.output.has_changed().unwrap_or_default() {
-            let device = self.output.borrow_and_update().clone();
-            if let Some(player) = Self::open(&self.format, device) {
-                self.player = player;
-            }
-        }
         if !crate::mirror::muted() {
-            apply_volume(&mut data);
+            scale(&mut data, crate::settings::phone_sound_volume());
             self.player.push(data);
         }
     }
 }
 
-fn scale(data: &mut [u8], level: u8) {
+pub(crate) fn scale(data: &mut [u8], level: u8) {
     if level >= 100 {
         return;
     }

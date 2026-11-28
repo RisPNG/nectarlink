@@ -53,9 +53,11 @@ The **Calls** page groups your phone's recent incoming, outgoing, and missed cal
 
 With `Elevated` on Android 13 or newer, the call in progress can move to your PC: click **On PC** on the call card or in Nectar Island. You hear the other person from your PC's speakers or headphones and talk into its microphone, over NectarLink's own encrypted connection, without Bluetooth. Your phone shows a notification that the call's sound is on your PC; tap **Back to phone** there, or click **On PC** again on the PC, to move it back. A call you answer or dial from the PC moves there on its own. Turn on **Phone sound on this PC** to route calls you answer or dial on the phone too. If the connection drops, a call routed to the PC returns there when you reconnect. The call stays on the phone if you moved it there yourself. When the call ends, everything goes back on its own.
 
-Use the call card's volume buttons to change how loud the call plays on the PC. Android's call volume remains under Android's control. Use headphones to keep the PC microphone from picking up the caller through its speakers.
+Use headphones to keep your PC microphone from picking up the caller through its speakers.
 
 Calls use the default communications microphone on Windows and the default audio input on Linux. Pick another input under **Settings › Camera & Audio › Microphone for calls**. Changes also apply during a call.
+
+On Windows, use **Output for calls** and **Call volume** in **Home › Phone controls** or **Settings › Camera & Audio › Calls through this PC**. You can set them before a call or change them while it plays on the PC. The call card's volume buttons adjust this same PC level while the call is routed there. Phone media and the phone's own volume have separate controls. **System default** uses the Windows default playback device. NectarLink also uses that device if the selected output is disconnected or unavailable.
 
 If Windows' default communications microphone is off or missing, NectarLink uses the default microphone instead. If NectarLink says Windows keeps it off the microphone, turn on **Settings › Privacy & security › Microphone › Let desktop apps access your microphone** in Windows.
 
