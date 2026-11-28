@@ -1,13 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package app.nectarlink.android.elevated
 
-import android.content.Context
-import android.media.AudioAttributes
-import android.media.AudioFormat
-import android.media.AudioManager
-import android.media.AudioRecord
-import android.os.Build
-import android.os.Process
 import android.os.SystemClock
 import android.view.InputDevice
 import android.view.InputEvent
@@ -46,9 +39,10 @@ import kotlin.concurrent.thread
  * (see [AppDisplay]); a `K` line asks for a keyframe; closing the
  * connection closes the window.
  *
- * A first line of `A` streams the phone's sound instead, `CALL` carries the
- * call in progress both ways, and `CALLCHECK` says whether this phone lets it
- * (see [CallAudio]).
+ * A first line of `A` streams the phone's sound instead, and `A KEEP`
+ * copies playback while it continues on the phone. `CALL` carries the
+ * call in progress both ways, and `CALLCHECK` says whether this phone lets
+ * it (see [CallAudio]).
  */
 /**
  * Compiles NectarLink ahead of time from its startup profile, as Android does
@@ -491,7 +485,8 @@ object InputServer {
             val first = runCatching { reader.nextLine(MAX_LINE_CHARS) }.getOrNull()
             client.soTimeout = 0
             if (first != null && first.startsWith("V ")) return appWindow(client, first, reader)
-            if (first == "A") return streamDeviceAudio(client.getOutputStream())
+            if (first == "A") return DeviceAudioMix.stream(client, keepOnPhone = false)
+            if (first == DeviceAudioMix.COPY_COMMAND) return DeviceAudioMix.stream(client, keepOnPhone = true)
             if (first == "CALL") return CallAudio.serve(client)
             if (first == "CALLCHECK") return CallAudio.check(client)
             val writer = java.io.OutputStreamWriter(client.getOutputStream(), Charsets.UTF_8)
@@ -513,81 +508,6 @@ object InputServer {
                     shutdown()
                 }
             }
-        }
-    }
-
-    /**
-     * Routes playback to an addressed, fixed-gain remote submix and sends its 48 kHz stereo PCM to the app.
-     * Android limits mixed speaker and loopback playback to media, games, and some voice communication, so this mix makes the PC the output for its matching tracks.
-     */
-    @android.annotation.SuppressLint("MissingPermission", "PrivateApi", "DiscouragedPrivateApi")
-    private fun streamDeviceAudio(out: java.io.OutputStream) {
-        val context = ShellContext.get()
-        val audio = checkNotNull(context.getSystemService(AudioManager::class.java))
-        val ruleType = Class.forName("android.media.audiopolicy.AudioMixingRule")
-        val ruleBuilderType = Class.forName("android.media.audiopolicy.AudioMixingRule\$Builder")
-        val ruleBuilder = ruleBuilderType.getConstructor().newInstance()
-        val matchUsage = ruleType.getField("RULE_MATCH_ATTRIBUTE_USAGE").getInt(null)
-        val matchUid = ruleType.getField("RULE_MATCH_UID").getInt(null)
-        val addRule = ruleBuilderType.getMethod("addRule", AudioAttributes::class.java, Int::class.javaPrimitiveType)
-        val exclude = ruleBuilderType.getMethod("excludeMixRule", Int::class.javaPrimitiveType, Any::class.java)
-        val usages = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            AudioAttributes::class.java.getMethod("getSdkUsages").invoke(null) as IntArray
-        } else {
-            AudioAttributes::class.java.getField("SDK_USAGES").get(null) as IntArray
-        }
-        for (usage in usages) {
-            addRule.invoke(ruleBuilder, AudioAttributes.Builder().setUsage(usage).build(), matchUsage)
-        }
-        // Keep PC playback and helper-injected call audio on their intended routes.
-        exclude.invoke(ruleBuilder, matchUid, context.packageManager.getPackageUid(PKG, 0))
-        exclude.invoke(ruleBuilder, matchUid, Process.myUid())
-        val rule = ruleBuilderType.getMethod("build").invoke(ruleBuilder)
-
-        val rate = 48_000
-        val format = AudioFormat.Builder()
-            .setSampleRate(rate)
-            .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
-            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-            .build()
-        val mixType = Class.forName("android.media.audiopolicy.AudioMix")
-        val mixBuilderType = Class.forName("android.media.audiopolicy.AudioMix\$Builder")
-        val mixBuilder = mixBuilderType.getConstructor(ruleType).newInstance(rule)
-        mixBuilderType.getMethod("setFormat", AudioFormat::class.java).invoke(mixBuilder, format)
-        val loopback = mixType.getField("ROUTE_FLAG_LOOP_BACK").getInt(null)
-        mixBuilderType.getMethod("setRouteFlags", Int::class.javaPrimitiveType).invoke(mixBuilder, loopback)
-        val mix = mixBuilderType.getMethod("build").invoke(mixBuilder)
-
-        val policyType = Class.forName("android.media.audiopolicy.AudioPolicy")
-        val policyBuilderType = Class.forName("android.media.audiopolicy.AudioPolicy\$Builder")
-        val policyBuilder = policyBuilderType.getConstructor(Context::class.java).newInstance(context)
-        policyBuilderType.getMethod("addMix", mixType).invoke(policyBuilder, mix)
-        val policy = policyBuilderType.getMethod("build").invoke(policyBuilder)
-        val register = AudioManager::class.java.getMethod("registerAudioPolicy", policyType)
-        val unregisterName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) "unregisterAudioPolicy" else "unregisterAudioPolicyAsync"
-        val unregister = AudioManager::class.java.getMethod(unregisterName, policyType)
-        val result = register.invoke(audio, policy) as Int
-        check(result == 0) { "device audio policy registration failed: $result" }
-        var recorder: AudioRecord? = null
-        try {
-            val record = policyType.getMethod("createAudioRecordSink", mixType).invoke(policy, mix) as? AudioRecord
-                ?: error("no device audio recorder")
-            recorder = record
-            check(record.state == AudioRecord.STATE_INITIALIZED) { "device audio recorder not initialized" }
-            record.startRecording()
-            check(record.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "device audio recorder did not start" }
-            val buf = ByteArray(rate / 100 * 2 * 2)
-            while (true) {
-                val n = record.read(buf, 0, buf.size)
-                if (n <= 0) break
-                out.write(buf, 0, n)
-                out.flush()
-            }
-        } catch (_: java.io.IOException) {
-            // Client disconnected.
-        } finally {
-            runCatching { recorder?.release() }
-            unregister.invoke(audio, policy)
         }
     }
 

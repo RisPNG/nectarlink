@@ -87,7 +87,9 @@ To hear what your phone plays (music, videos, app sounds) through your PC's spea
 - Playback resumes after reconnecting if the switch was on. On compatible devices, the switch also routes cellular calls you answer or dial on the phone. See [Calls](calls.md#talking-through-your-pc-windows).
 - Opening the phone's mirror window takes over, since that brings the sound with the picture. Turn it off on the PC, or tap **Stop** on the phone.
 
-To hear eligible media on both devices on Android 10 or newer, turn on **Keep sound playing on the phone** in **Phone controls** on the PC's Home screen. The same setting is available under **Settings › Features & Data › Control your PC** in NectarLink on your phone. Restart **Phone sound on this PC** if it was already on. Android may ask for permission to capture playback even when Elevated is running. Some apps prevent Android from capturing their playback. The phone's media volume keys keep their usual function in this mode.
+To hear playback on both devices, turn on **Keep sound playing on the phone** in **Phone controls** on the PC's Home screen. The same setting is available under **Settings › Features & Data › Control your PC** in NectarLink on your phone. Restart **Phone sound on this PC** if it was already on.
+
+On compatible Android 13 or newer phones, the Elevated helper can also copy eligible app calls while their sound continues playing on the phone. The calling app still uses the phone's microphone. If the helper can't start a playback copy, Android 10 or newer can share eligible media after you allow capture on the phone. Some apps prevent their playback from being copied.
 
 ### 4. Voice Recorder: Record on Phone, Save on PC
 

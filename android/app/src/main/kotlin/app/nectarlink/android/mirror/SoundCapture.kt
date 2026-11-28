@@ -23,14 +23,14 @@ import app.nectarlink.core.mirrorAudioConfig
 import app.nectarlink.services.client.NectarlinkServiceContract
 
 /**
- * Streams phone playback as 48 kHz stereo PCM in 10 ms packets. Uses the
- * Elevated helper's fixed-gain submix when available and Android 10+
- * [AudioPlaybackCaptureConfiguration] when sharing through MediaProjection.
+ * Streams phone playback as 48 kHz stereo PCM in 10 ms packets. Elevated can
+ * route playback to the PC or copy it while leaving local playback running.
+ * [AudioPlaybackCaptureConfiguration] is the fallback for eligible media.
  */
 class SoundCapture(
     private val projection: MediaProjection?,
     private val stream: MirrorStream,
-    private val allowElevated: Boolean = true,
+    private val keepSoundOnPhone: Boolean = false,
     /** Called once the sound stops (the PC stopped listening, or capture failed). */
     private val onEnded: () -> Unit = {},
 ) {
@@ -46,9 +46,11 @@ class SoundCapture(
         running = true
         Thread({
             try {
-                if (running && allowElevated && Elevated.hasCapability(NectarlinkServiceContract.CAP_DEVICE_AUDIO)) {
+                val useElevated = if (keepSoundOnPhone) Elevated.canKeepAudioOnPhone()
+                    else Elevated.hasCapability(NectarlinkServiceContract.CAP_DEVICE_AUDIO)
+                if (running && useElevated) {
                     try {
-                        Elevated.openAudioStream()?.use { socket ->
+                        Elevated.openAudioStream(keepOnPhone = keepSoundOnPhone)?.use { socket ->
                             elevatedSocket = socket
                             try {
                                 capture(socket.inputStream::read)

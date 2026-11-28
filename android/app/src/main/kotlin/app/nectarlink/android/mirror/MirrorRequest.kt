@@ -30,7 +30,7 @@ data class MirrorRequest(
     val screenOff: Boolean = false,
     /** Only the sound: the PC plays it without a window. */
     val soundOnly: Boolean = false,
-    /** Use Android playback capture so a sound-only session leaves local audio playing. */
+    /** Leave local playback running during a sound-only session. */
     val keepSoundOnPhone: Boolean = false,
 ) {
     fun toIntent(intent: Intent): Intent = intent

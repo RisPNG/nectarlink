@@ -1326,11 +1326,16 @@ object Elevated {
         return send(writer, "G $buttons $lx $ly $rx $ry $lt $rt")
     }
 
-    /**
-     * Opens a 48 kHz 16-bit stereo PCM audio stream from the Elevated helper
-     * (`InputServer` command `"A"`) or the system service. Returns null if Elevated isn't running.
-     */
-    fun openAudioStream(): ElevatedAudioStream? {
+    /** The local helper can attempt Android's privileged playback copy. */
+    fun canKeepAudioOnPhone(): Boolean =
+        Build.VERSION.SDK_INT >= DeviceAudioMix.MIN_COPY_SDK && input != null && helper != null
+
+    /** Opens an Elevated 48 kHz 16-bit stereo PCM stream. */
+    fun openAudioStream(keepOnPhone: Boolean = false): ElevatedAudioStream? {
+        if (keepOnPhone) {
+            if (!canKeepAudioOnPhone()) return null
+            return askAudio(DeviceAudioMix.COPY_COMMAND, "phone sound copy")?.let(::SocketAudioStream)
+        }
         val client = activeService(NectarlinkServiceContract.CAP_DEVICE_AUDIO)
         if (client != null) {
             return client.openDeviceAudio()?.let(::PfdAudioStream)
@@ -1362,7 +1367,7 @@ object Elevated {
             }
             return stream
         }
-        return askCallAudio("CALL")?.let(::SocketCallAudioStream)
+        return askAudio("CALL")?.let(::SocketCallAudioStream)
     }
 
     /**
@@ -1376,7 +1381,7 @@ object Elevated {
     private fun checkCallAudio() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         Thread {
-            val supported = askCallAudio("CALLCHECK")?.also { runCatching { it.close() } } != null
+            val supported = askAudio("CALLCHECK")?.also { runCatching { it.close() } } != null
             if (supported != callAudioSupported && helper != null) {
                 callAudioSupported = supported
                 Log.i(TAG, "call sound on a PC: ${if (supported) "supported" else "not supported"}")
@@ -1385,12 +1390,12 @@ object Elevated {
         }.start()
     }
 
-    /** Sends a call-sound command to the helper: the socket after its `OK`, or null. */
-    private fun askCallAudio(command: String): java.net.Socket? {
+    /** Opens an audio socket after the helper confirms it has started capture. */
+    private fun askAudio(command: String, source: String = "call sound"): java.net.Socket? {
         val (port, token) = helper ?: return null
         val socket = runCatching {
             HelperProof.open(port, token, command, PROOF_MS).apply { soTimeout = CALL_AUDIO_ANSWER_MS }
-        }.onFailure { Log.w(TAG, "can't reach the Elevated helper for call sound", it) }.getOrNull() ?: return null
+        }.onFailure { Log.w(TAG, "can't reach the Elevated helper for $source", it) }.getOrNull() ?: return null
         // The answer line, read byte by byte so no sound after it is swallowed.
         val answer = runCatching {
             val line = StringBuilder()
@@ -1402,7 +1407,7 @@ object Elevated {
             line.toString()
         }.getOrDefault("")
         if (answer != "OK") {
-            Log.w(TAG, "no call sound: $answer")
+            Log.w(TAG, "no $source: $answer")
             runCatching { socket.close() }
             return null
         }
