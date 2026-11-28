@@ -97,6 +97,9 @@
     <string name="local_network_text">O Android pede sua autorização antes de um app se comunicar com dispositivos da rede. O NectarLink precisa dessa permissão para acessar seu PC.</string>
     <string name="channel_elevated">Configuração da depuração por Wi-Fi</string>
     <string name="elevated_title">Elevated</string>
+    <string name="home_elevated_on">Elevated ativado</string>
+    <string name="home_elevated_off">Elevated desativado</string>
+    <string name="home_elevated_find_wireless">Encontrar a depuração por Wi-Fi nas configurações do Android</string>
     <string name="elevated_not_set_up">Toque em tempo real, todas as teclas e, nas chamadas, silenciar, colocar em espera e teclado numérico pelo PC.</string>
     <string name="elevated_turn_on_wireless">Ativar a depuração por Wi-Fi sozinho</string>
     <string name="elevated_turn_on_wireless_hint">O Elevated precisa dela, então a ativa de novo quando a encontra desligada, em qualquer Wi-Fi. Desative isto para ativá-la você mesmo nas Opções do desenvolvedor.</string>

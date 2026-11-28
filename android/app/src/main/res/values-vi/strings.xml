@@ -94,6 +94,9 @@
 <string name="local_network_text">Android hỏi trước khi một ứng dụng nói chuyện với các thiết bị trên mạng của bạn. NectarLink cần quyền này để truy cập PC của bạn.</string>
 <string name="channel_elevated">Thiết lập gỡ lỗi không dây</string>
 <string name="elevated_title">Nâng cao</string>
+<string name="home_elevated_on">Chế độ nâng cao đã bật</string>
+<string name="home_elevated_off">Chế độ nâng cao đã tắt</string>
+<string name="home_elevated_find_wireless">Tìm Gỡ lỗi không dây trong phần cài đặt Android</string>
 <string name="elevated_not_set_up">Chạm theo thời gian thực, mọi phím, và tắt tiếng, giữ và bàn phím số khi gọi từ PC của bạn.</string>
     <string name="elevated_turn_on_wireless">Tự bật Gỡ lỗi không dây</string>
     <string name="elevated_turn_on_wireless_hint">Elevated cần tính năng này nên sẽ bật lại khi thấy nó tắt, trên mọi mạng Wi-Fi. Tắt mục này để tự bật trong Tùy chọn nhà phát triển.</string>

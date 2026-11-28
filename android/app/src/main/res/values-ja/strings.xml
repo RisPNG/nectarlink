@@ -97,6 +97,9 @@
     <string name="local_network_text">Androidでは、アプリがネットワーク上のデバイスと通信する前に確認が求められます。NectarLinkがPCに接続するには、この許可が必要です。</string>
     <string name="channel_elevated">ワイヤレス デバッグの設定</string>
     <string name="elevated_title">昇格</string>
+    <string name="home_elevated_on">昇格オン</string>
+    <string name="home_elevated_off">昇格オフ</string>
+    <string name="home_elevated_find_wireless">Android の設定でワイヤレス デバッグを探す</string>
     <string name="elevated_not_set_up">PCからの通話時に、リアルタイムタッチ、全キー操作、ミュート、保留、キーパッド操作が可能です。</string>
     <string name="elevated_turn_on_wireless">ワイヤレス デバッグを自動でオンにする</string>
     <string name="elevated_turn_on_wireless_hint">Elevated に必要なため、オフになっていればどの Wi-Fi でもオンに戻します。オフにすると、開発者向けオプションで自分でオンにします。</string>

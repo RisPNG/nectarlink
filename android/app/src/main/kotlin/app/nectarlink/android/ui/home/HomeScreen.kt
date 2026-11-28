@@ -3,6 +3,9 @@ package app.nectarlink.android.ui.home
 
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.provider.Settings
 import android.text.format.DateUtils
 import android.text.format.Formatter
 import android.util.LruCache
@@ -95,6 +98,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -113,6 +117,7 @@ import app.nectarlink.android.core.PcFolder
 import app.nectarlink.android.core.LocalNetwork
 import app.nectarlink.android.core.WakeState
 import app.nectarlink.android.core.isFinished
+import app.nectarlink.android.elevated.Elevated
 import app.nectarlink.android.files.ReceivedFiles
 import app.nectarlink.android.files.transferTitle
 import app.nectarlink.android.mirror.InputService
@@ -311,6 +316,7 @@ fun HomeScreen(
         } else {
             val orderedKeys = buildList {
                 add("home_header")
+                add("home_elevated_status")
                 if (showWhatsNewGuideBanner) add("whats_new_guide_banner")
                 if (showHiveInvite && !showWhatsNewGuideBanner) add("hive_invite")
                 if (communityInviteVisible) add("community_invite")
@@ -469,6 +475,26 @@ fun HomeScreen(
                     Icon(painterResource(R.drawable.ic_qr), contentDescription = stringResource(R.string.action_pair_new))
                 }
             }
+        }
+        item(key = "home_elevated_status", contentType = "shortcut") {
+            val context = LocalContext.current
+            val elevated by Elevated.state.collectAsStateWithLifecycle()
+            val action = stringResource(
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) R.string.home_elevated_find_wireless
+                else R.string.elevated_open_developer,
+            )
+            AssistChip(
+                onClick = { openWirelessDebuggingSettings(context) },
+                label = {
+                    Text(
+                        stringResource(
+                            if (elevated is Elevated.State.Running) R.string.home_elevated_on else R.string.home_elevated_off,
+                        ),
+                    )
+                },
+                leadingIcon = { Icon(painterResource(R.drawable.ic_settings), contentDescription = null) },
+                modifier = Modifier.semantics { onClick(label = action, action = null) },
+            )
         }
         if (showWhatsNewGuideBanner) {
             item(key = "whats_new_guide_banner", contentType = "banner") {
@@ -1175,13 +1201,34 @@ private fun openAppDetailsSettings(context: android.content.Context) {
     }
 }
 
-private fun openDeveloperOptions(context: android.content.Context) {
-    val devIntent = Intent(android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
+private fun openWirelessDebuggingSettings(context: android.content.Context) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+        openDeveloperOptions(context)
+        return
+    }
+    // Try dedicated actions before falling back to Developer options.
+    val actions = listOf("android.settings.WIRELESS_DEBUGGING_SETTINGS", "com.android.settings.WIRELESS_DEBUGGING_SETTINGS")
+    for (action in actions) {
+        val intent = Intent(action)
+            .setPackage("com.android.settings")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (runCatching { context.startActivity(intent) }.isSuccess) return
+    }
+    openDeveloperOptions(context, highlight = "toggle_adb_wireless")
+}
+
+private fun openDeveloperOptions(context: android.content.Context, highlight: String? = null) {
+    val devIntent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    if (highlight != null) {
+        // Android Settings can bring a specific preference into view on supported devices.
+        val arguments = Bundle().apply { putString(":settings:fragment_args_key", highlight) }
+        devIntent.putExtra(":settings:show_fragment_args", arguments)
+    }
     if (runCatching { context.startActivity(devIntent) }.isFailure) {
         runCatching {
             context.startActivity(
-                Intent(android.provider.Settings.ACTION_SETTINGS)
+                Intent(Settings.ACTION_SETTINGS)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
         }

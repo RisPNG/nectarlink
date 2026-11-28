@@ -91,6 +91,9 @@
     <string name="local_network_text">Android спрашивает, прежде чем приложение обратится к устройствам в вашей сети. NectarLink это нужно, чтобы связаться с ПК.</string>
     <string name="channel_elevated">Настройка отладки по Wi-Fi</string>
     <string name="elevated_title">Elevated</string>
+    <string name="home_elevated_on">Elevated включён</string>
+    <string name="home_elevated_off">Elevated выключен</string>
+    <string name="home_elevated_find_wireless">Найти отладку по Wi-Fi в настройках Android</string>
     <string name="elevated_not_set_up">Касания в реальном времени, любые клавиши, а также выключение микрофона, удержание и клавиатура в вызовах с ПК.</string>
     <string name="elevated_turn_on_wireless">Включать отладку по Wi-Fi автоматически</string>
     <string name="elevated_turn_on_wireless_hint">Она нужна Elevated, поэтому он снова включает её, если она выключена, в любой сети Wi-Fi. Выключите это, чтобы включать её самостоятельно в параметрах для разработчиков.</string>

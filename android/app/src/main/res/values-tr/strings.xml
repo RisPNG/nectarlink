@@ -97,6 +97,9 @@
     <string name="local_network_text">Android, bir uygulama ağınızdaki cihazlarla iletişim kurmadan önce izin ister. NectarLink\'in bilgisayarınıza ulaşmak için bu izne ihtiyacı var.</string>
     <string name="channel_elevated">Kablosuz hata ayıklama kurulumu</string>
     <string name="elevated_title">Yükseltilmiş</string>
+    <string name="home_elevated_on">Yükseltilmiş mod açık</string>
+    <string name="home_elevated_off">Yükseltilmiş mod kapalı</string>
+    <string name="home_elevated_find_wireless">Android ayarlarında kablosuz hata ayıklamayı bul</string>
     <string name="elevated_not_set_up">Bilgisayarınızdan gerçek zamanlı dokunma, tüm tuşlar ve aramalarda sessize alma, bekletme ve tuş takımı.</string>
     <string name="elevated_turn_on_wireless">Kablosuz hata ayıklamayı kendisi açsın</string>
     <string name="elevated_turn_on_wireless_hint">Elevated buna ihtiyaç duyar, bu yüzden kapalı bulduğunda her Wi-Fi ağında yeniden açar. Geliştirici seçenekleri\'nden kendin açmak için bunu kapat.</string>

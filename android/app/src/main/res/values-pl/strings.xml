@@ -97,6 +97,9 @@
     <string name="local_network_text">Android prosi o zgodę, zanim aplikacja połączy się z urządzeniami w Twojej sieci. NectarLink potrzebuje jej, aby połączyć się z komputerem.</string>
     <string name="channel_elevated">Konfiguracja debugowania bezprzewodowego</string>
     <string name="elevated_title">Rozszerzone uprawnienia</string>
+    <string name="home_elevated_on">Rozszerzone uprawnienia włączone</string>
+    <string name="home_elevated_off">Rozszerzone uprawnienia wyłączone</string>
+    <string name="home_elevated_find_wireless">Znajdź debugowanie bezprzewodowe w ustawieniach Androida</string>
     <string name="elevated_not_set_up">Obsługa dotyku w czasie rzeczywistym i wszystkich klawiszy oraz wyciszanie, wstrzymywanie i klawiatura numerów podczas rozmów — z komputera.</string>
     <string name="elevated_turn_on_wireless">Włączaj debugowanie bezprzewodowe samodzielnie</string>
     <string name="elevated_turn_on_wireless_hint">Elevated go potrzebuje, więc włącza je ponownie, gdy jest wyłączone, w każdej sieci Wi-Fi. Wyłącz to, aby włączać je samemu w opcjach programisty.</string>
