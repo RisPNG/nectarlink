@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The phone's sound on this PC without a mirror window
 //! (`MirrorStart::sound_only`, docs/protocol/mirror.md): what the phone plays
-//! comes out of the PC's speakers or headphones. Opening the phone's mirror
-//! window takes over, since that brings the sound too.
+//! comes out of the PC's audio output. Opening the phone's mirror window
+//! takes over playback, keeping the same volume and output.
 
 use std::{
     sync::{
@@ -111,9 +111,54 @@ fn gain(level: u8) -> f32 {
     x * x
 }
 
-/// Scales 16-bit little-endian PCM to the phone sound volume. Untouched at 100.
-pub fn apply_volume(data: &mut [u8]) {
-    scale(data, crate::settings::phone_sound_volume());
+pub(crate) struct Playback {
+    player: Player,
+    #[cfg(windows)]
+    format: MirrorAudioConfig,
+    #[cfg(windows)]
+    output: tokio::sync::watch::Receiver<Option<String>>,
+}
+
+impl Playback {
+    pub(crate) fn start(format: MirrorAudioConfig) -> Option<Self> {
+        #[cfg(windows)]
+        let mut output = crate::settings::PHONE_SOUND_OUTPUT.subscribe();
+        #[cfg(windows)]
+        let device = output.borrow_and_update().clone();
+        #[cfg(not(windows))]
+        let device = None;
+        Some(Self {
+            player: Self::open(&format, device)?,
+            #[cfg(windows)]
+            format,
+            #[cfg(windows)]
+            output,
+        })
+    }
+
+    fn open(format: &MirrorAudioConfig, device: Option<String>) -> Option<Player> {
+        let channels = u16::from(format.channels);
+        match device {
+            None => Player::start(format.rate, channels),
+            device => Player::start_on(device, format.rate, channels),
+        }
+        .inspect_err(|e| tracing::warn!(error = %e, "can't play the phone's sound"))
+        .ok()
+    }
+
+    pub(crate) fn push(&mut self, mut data: Vec<u8>) {
+        #[cfg(windows)]
+        if self.output.has_changed().unwrap_or_default() {
+            let device = self.output.borrow_and_update().clone();
+            if let Some(player) = Self::open(&self.format, device) {
+                self.player = player;
+            }
+        }
+        if !crate::mirror::muted() {
+            scale(&mut data, crate::settings::phone_sound_volume());
+            self.player.push(data);
+        }
+    }
 }
 
 fn scale(data: &mut [u8], level: u8) {
@@ -345,7 +390,7 @@ pub fn sink(device: &DeviceId) -> Option<Arc<dyn MirrorSink>> {
 /// Plays the sound stream; there's no picture with it.
 struct Sink {
     session: Session,
-    player: Mutex<Option<Player>>,
+    player: Mutex<Option<Playback>>,
 }
 
 impl MirrorSink for Sink {
@@ -360,9 +405,7 @@ impl MirrorSink for Sink {
             return;
         }
         // A new format: a new player (the old one ends when dropped).
-        let player = Player::start(config.rate, u16::from(config.channels))
-            .inspect_err(|e| tracing::warn!(error = %e, "can't play the phone's sound"))
-            .ok();
+        let player = Playback::start(config);
         let playing = player.is_some();
         *self.player.lock().unwrap_or_else(|e| e.into_inner()) = player;
         if playing {
@@ -371,13 +414,11 @@ impl MirrorSink for Sink {
         }
     }
 
-    fn audio(&self, _time_us: u64, mut data: Vec<u8>) {
-        // The mirror window's mute is the phone's sound on this PC.
-        if !is_current(self.session) || crate::mirror::muted() {
+    fn audio(&self, _time_us: u64, data: Vec<u8>) {
+        if !is_current(self.session) {
             return;
         }
-        apply_volume(&mut data);
-        if let Some(player) = self.player.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        if let Some(player) = self.player.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
             player.push(data);
         }
     }

@@ -5955,6 +5955,17 @@ Qué necesitas
         <translation>Permítelo en %1</translation>
     </message>
     <message>
+        <location filename="../qml/pages/HomePage.qml" line="2139"/>
+        <location filename="../qml/pages/HomePage.qml" line="2833"/>
+        <source>Phone sound output</source>
+        <translation>Salida de sonido del teléfono</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/HomePage.qml" line="2835"/>
+        <source>System default</source>
+        <translation>Predeterminada del sistema</translation>
+    </message>
+    <message>
         <location filename="../qml/pages/HomePage.qml" line="2126"/>
         <location filename="../qml/pages/HomePage.qml" line="2141"/>
         <source>Phone sound volume</source>
@@ -6351,6 +6362,7 @@ Qué necesitas
     </message>
     <message>
         <location filename="../qml/pages/HomePage.qml" line="3971"/>
+        <location filename="../qml/pages/HomePage.qml" line="2853"/>
         <source>Close</source>
         <translation>Cerrar</translation>
     </message>

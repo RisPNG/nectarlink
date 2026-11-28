@@ -5592,6 +5592,17 @@ O que precisa
         <translation>Solucionar problemas</translation>
     </message>
     <message>
+        <location filename="../qml/pages/HomePage.qml" line="2139"/>
+        <location filename="../qml/pages/HomePage.qml" line="2833"/>
+        <source>Phone sound output</source>
+        <translation>Saída de som do celular</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/HomePage.qml" line="2835"/>
+        <source>System default</source>
+        <translation>Padrão do sistema</translation>
+    </message>
+    <message>
         <location filename="../qml/pages/HomePage.qml" line="2126"/>
         <location filename="../qml/pages/HomePage.qml" line="2141"/>
         <source>Phone sound volume</source>
@@ -6355,6 +6366,7 @@ O que precisa
     </message>
     <message>
         <location filename="../qml/pages/HomePage.qml" line="3971"/>
+        <location filename="../qml/pages/HomePage.qml" line="2853"/>
         <source>Close</source>
         <translation>Fechar</translation>
     </message>
