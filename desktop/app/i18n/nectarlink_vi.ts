@@ -5958,6 +5958,17 @@ Nó cần gì
         <translation>Cho phép trên %1</translation>
     </message>
     <message>
+        <location filename="../qml/pages/HomePage.qml" line="2139"/>
+        <location filename="../qml/pages/HomePage.qml" line="2833"/>
+        <source>Phone sound output</source>
+        <translation>Đầu ra âm thanh điện thoại</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/HomePage.qml" line="2835"/>
+        <source>System default</source>
+        <translation>Mặc định của hệ thống</translation>
+    </message>
+    <message>
         <location filename="../qml/pages/HomePage.qml" line="2126"/>
         <location filename="../qml/pages/HomePage.qml" line="2141"/>
         <source>Phone sound volume</source>
@@ -6354,6 +6365,7 @@ Nó cần gì
     </message>
     <message>
         <location filename="../qml/pages/HomePage.qml" line="3971"/>
+        <location filename="../qml/pages/HomePage.qml" line="2853"/>
         <source>Close</source>
         <translation>Đóng</translation>
     </message>

@@ -28,10 +28,10 @@ use crate::{
         native::ffi,
     },
     core_host,
+    phone_sound::Playback,
     state::Changes,
     transfers::{ACTION_OPEN, ACTION_SHOW, TOAST_GROUP},
     win::{
-        audio_out::Player,
         h264::{Decoder, to_bgrx},
         image::{Bitmap, encode_png},
         mp4::{MirrorRecorder, VideoCodec, can_record, local_timestamp_filename, merge_sps_pps},
@@ -2479,7 +2479,7 @@ enum Item {
 struct Sink {
     window: Window,
     video: OnceLock<Video>,
-    sound: Mutex<Option<Player>>,
+    sound: Mutex<Option<Playback>>,
 }
 
 /// Asks the phone for a keyframe, at most every 500 ms per window: a
@@ -2697,17 +2697,11 @@ impl MirrorSink for Sink {
         }
         let mut sound = self.sound.lock().unwrap_or_else(|e| e.into_inner());
         // A new format: a new player (the old one ends when dropped).
-        *sound = match Player::start(config.rate, u16::from(config.channels)) {
-            Ok(player) => Some(player),
-            Err(e) => {
-                tracing::warn!(error = %e, "can't play the phone's sound");
-                None
-            }
-        };
+        *sound = Playback::start(config);
         set_sound(self.window.device, sound.is_some());
     }
 
-    fn audio(&self, time_us: u64, mut data: Vec<u8>) {
+    fn audio(&self, time_us: u64, data: Vec<u8>) {
         if self.window.session == MIRROR_SCREEN
             && ACTIVE_RECORDERS.load(Ordering::Relaxed) > 0
             && let Some(rec) = RECORDERS
@@ -2719,12 +2713,7 @@ impl MirrorSink for Sink {
         {
             tracing::debug!(error = %e, "mirror recording audio packet failed");
         }
-        if muted() {
-            return;
-        }
-        // After the recording, which keeps the phone's own level.
-        crate::phone_sound::apply_volume(&mut data);
-        if let Some(player) = self.sound.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        if let Some(player) = self.sound.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
             player.push(data);
         }
     }

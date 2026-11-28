@@ -135,6 +135,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "setPhoneSoundVolume"]
         fn set_phone_sound_volume(self: &MediaList, level: i32, done: bool);
+        /// Lists the current playback endpoints as JSON `[{ "id", "name" }]`.
+        #[qinvokable]
+        #[cxx_name = "phoneSoundOutputs"]
+        fn phone_sound_outputs(self: &MediaList) -> QString;
     }
 
     impl cxx_qt::Threading for MediaList {}
@@ -330,6 +334,18 @@ impl qobject::MediaList {
 
     pub fn set_phone_sound_volume(&self, level: i32, done: bool) {
         crate::phone_sound::set_volume(level.clamp(0, 100) as u8, done);
+    }
+
+    pub fn phone_sound_outputs(&self) -> QString {
+        #[cfg(windows)]
+        {
+            let devices = crate::win::audio::output_devices();
+            let list: Vec<_> =
+                devices.iter().map(|d| serde_json::json!({ "id": d.id, "name": d.name })).collect();
+            QString::from(&serde_json::Value::Array(list).to_string())
+        }
+        #[cfg(not(windows))]
+        QString::from("[]")
     }
 
     pub fn first_for(&self, device: &QString) -> i32 {
