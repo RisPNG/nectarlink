@@ -96,6 +96,9 @@
     <string name="local_network_text">Android питає, перш ніж застосунок звернеться до пристроїв у вашій мережі. NectarLink це потрібно, щоб дістатися ПК.</string>
     <string name="channel_elevated">Налаштування бездротового налагодження</string>
     <string name="elevated_title">Elevated</string>
+    <string name="home_elevated_on">Elevated увімкнено</string>
+    <string name="home_elevated_off">Elevated вимкнено</string>
+    <string name="home_elevated_find_wireless">Знайти бездротове налагодження в налаштуваннях Android</string>
     <string name="elevated_not_set_up">Сенсорне введення в реальному часі, усі клавіші, а також вимкнення мікрофона, утримання й клавіатура під час дзвінків з ПК.</string>
     <string name="elevated_turn_on_wireless">Вмикати бездротове налагодження автоматично</string>
     <string name="elevated_turn_on_wireless_hint">Воно потрібне для Elevated, тож вмикається знову, коли виявиться вимкненим, у будь-якій мережі Wi-Fi. Вимкніть це, щоб вмикати його самостійно в параметрах розробника.</string>

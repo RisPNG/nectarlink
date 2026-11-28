@@ -97,6 +97,9 @@
     <string name="local_network_text">Android pide permiso antes de que una aplicación se comunique con los dispositivos de tu red. NectarLink lo necesita para conectar con tu PC.</string>
     <string name="channel_elevated">Configuración de depuración inalámbrica</string>
     <string name="elevated_title">Elevated</string>
+    <string name="home_elevated_on">Elevated activado</string>
+    <string name="home_elevated_off">Elevated desactivado</string>
+    <string name="home_elevated_find_wireless">Buscar la depuración inalámbrica en los ajustes de Android</string>
     <string name="elevated_not_set_up">Control táctil en tiempo real, todas las teclas y controles para silenciar, poner en espera y usar el teclado en las llamadas desde tu PC.</string>
     <string name="elevated_turn_on_wireless">Activar automáticamente la depuración inalámbrica</string>
     <string name="elevated_turn_on_wireless_hint">Elevated la necesita, así que la vuelve a activar cuando la encuentra desactivada, en cualquier Wi-Fi. Desactiva esto para activarla tú en Opciones de desarrollador.</string>

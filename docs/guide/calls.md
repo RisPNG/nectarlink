@@ -15,7 +15,7 @@ The **Calls** page on your PC lets you see incoming phone calls with caller ID, 
 | **Per-Device Toggles** | **Calls** and **Contacts** (both enabled by default in **Settings › Devices** on the PC). |
 | **Network** | Local network, USB cable, or **Connect over mobile data**. |
 
-On the PC, **Home > Phone controls** shows whether Elevated is on for the connected phone. On the phone, open **Settings > Permissions > Control from your PC** to see how the active Elevated helper started. Wireless debugging and USB debugging can both start the helper. NectarLink sends call controls and PC call audio over its paired connection.
+On the PC, **Home > Phone controls** shows whether Elevated is on for the connected phone. On Android, tap the Elevated status at the top of **Home** to find **Wireless debugging** in Android settings. The shortcut opens Developer options when Android does not expose a direct shortcut. Use **Settings > Permissions > Control from your PC** in NectarLink for first-time Elevated setup or to see how the active helper started. Wireless debugging and USB debugging can both start the helper. NectarLink sends call controls and PC call audio over its paired connection.
 
 Basic cellular call controls work in Standard mode. WhatsApp call alerts and controls use the app's notifications and need notification access. Two-way call audio through your PC is available for cellular calls on compatible phones with Elevated running.
 

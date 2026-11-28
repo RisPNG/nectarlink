@@ -91,6 +91,9 @@
     <string name="local_network_text">应用与网络中的设备通信前，Android会先询问。NectarLink需要此权限才能访问你的电脑。</string>
     <string name="channel_elevated">无线调试设置</string>
     <string name="elevated_title">高级权限</string>
+    <string name="home_elevated_on">高级权限已开启</string>
+    <string name="home_elevated_off">高级权限已关闭</string>
+    <string name="home_elevated_find_wireless">在 Android 设置中查找无线调试</string>
     <string name="elevated_not_set_up">从电脑实现实时触控、全部按键，以及通话中的静音、保持和拨号盘。</string>
     <string name="elevated_turn_on_wireless">自动开启无线调试</string>
     <string name="elevated_turn_on_wireless_hint">Elevated 需要它，所以发现它关闭时会在任何 Wi-Fi 上重新开启。关闭此项后，请自行在开发者选项中开启。</string>

@@ -97,6 +97,9 @@
     <string name="local_network_text">Android asks before an app talks to devices on your network. NectarLink needs it to reach your PC.</string>
     <string name="channel_elevated">Wireless debugging setup</string>
     <string name="elevated_title">Elevated</string>
+    <string name="home_elevated_on">Elevated on</string>
+    <string name="home_elevated_off">Elevated off</string>
+    <string name="home_elevated_find_wireless">Find Wireless debugging in Android settings</string>
     <string name="elevated_not_set_up">Real-time touch, every key, and mute, hold and keypad on calls from your PC.</string>
     <string name="elevated_turn_on_wireless">Turn on Wireless debugging by itself</string>
     <string name="elevated_turn_on_wireless_hint">Elevated needs it, so it turns it back on when it finds it off, on any Wi-Fi. Turn this off to switch it on yourself in Developer options.</string>
