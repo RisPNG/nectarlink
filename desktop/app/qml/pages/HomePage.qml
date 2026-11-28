@@ -495,7 +495,6 @@ Item {
                 model: DeviceList
                 delegate: DeviceHome {
                     required property int index
-                    required property string os
                     visible: index === page.current && !page.isPc(kind, os)
                     width: visible ? column.width : 0
                 }
@@ -618,6 +617,7 @@ Item {
         required property string rawName
         required property bool hasNickname
         required property string kind
+        required property string os
         required property string osVersion
         required property string model
         required property bool online
@@ -2005,15 +2005,34 @@ Item {
 
                     Item {
                         width: parent.width
-                        height: 24
-                        Txt {
+                        height: Math.max(phoneControlsHeading.height, soundDisplayButton.height)
+                        Column {
+                            id: phoneControlsHeading
                             anchors.left: parent.left
+                            anchors.right: soundDisplayButton.left
+                            anchors.rightMargin: 8
                             anchors.verticalCenter: parent.verticalCenter
-                            text: qsTr("Phone controls")
-                            role: "label"
-                            muted: true
+                            spacing: 2
+                            Txt {
+                                width: parent.width
+                                text: qsTr("Phone controls")
+                                role: "label"
+                                muted: true
+                            }
+                            Txt {
+                                width: parent.width
+                                visible: home.online && home.os === "android"
+                                    && (home.power === "basic" || home.power === "assist" || home.power === "elevated")
+                                role: "caption"
+                                wrapMode: Text.Wrap
+                                color: home.power === "elevated" ? Theme.primary : Theme.surfaceContentVariant
+                                text: home.power === "elevated" ? qsTr("Elevated on") : qsTr("Elevated off")
+                                Accessible.role: Accessible.StaticText
+                                Accessible.name: text
+                            }
                         }
                         Button {
+                            id: soundDisplayButton
                             anchors.right: parent.right
                             anchors.verticalCenter: parent.verticalCenter
                             variant: "text"

@@ -218,7 +218,8 @@ fn role_value(device: &Row, role: &str) -> QVariant {
             PowerLevel::Assist => "assist",
             PowerLevel::Elevated => "elevated",
             PowerLevel::NotApplicable => "n/a",
-            PowerLevel::Basic | PowerLevel::Unknown => "basic",
+            PowerLevel::Basic => "basic",
+            PowerLevel::Unknown => "unknown",
         }),
         "lastSeen" => QVariant::from(&match device.link {
             LinkState::Offline { last_seen: Some(at) } => at as f64,
@@ -376,6 +377,7 @@ mod tests {
         let d = Row::from_device(d);
         assert_eq!(role_value(&d, "name").value::<QString>().map(String::from).as_deref(), Some("Pixel"));
         assert_eq!(role_value(&d, "online").value::<bool>(), Some(true));
+        assert_eq!(role_value(&d, "power").value::<QString>().map(String::from).as_deref(), Some("basic"));
         assert_eq!(role_value(&d, "rttMs").value::<i32>(), Some(7));
         assert_eq!(role_value(&d, "battery").value::<i32>(), Some(64));
         assert_eq!(
@@ -394,5 +396,13 @@ mod tests {
                 .unwrap_or_default()
                 .contains("\"aspect\":0.45")
         );
+    }
+
+    #[test]
+    fn power_role_distinguishes_unknown_from_basic() {
+        let mut d = device(5, "Pixel");
+        d.power = PowerLevel::Unknown;
+        let d = Row::from_device(d);
+        assert_eq!(role_value(&d, "power").value::<QString>().map(String::from).as_deref(), Some("unknown"));
     }
 }
