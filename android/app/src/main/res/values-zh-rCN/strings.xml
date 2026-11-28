@@ -97,6 +97,8 @@
     <string name="elevated_waiting">正在等待无线调试，请在开发者选项中开启。</string>
     <string name="elevated_starting">正在启动…</string>
     <string name="elevated_running">已开启：电脑的鼠标和键盘就像真实的触摸屏和键盘一样工作。</string>
+    <string name="elevated_running_wireless">已开启（通过无线调试启动）。</string>
+    <string name="elevated_running_usb">已开启（通过 USB 调试启动）。</string>
     <string name="elevated_failed">无法启动，请确认无线调试已开启，然后重试。</string>
     <string name="elevated_not_paired">手机已忘记NectarLink的配对信息，请重新设置。</string>
     <string name="elevated_start_with">启动方式</string>

@@ -102,6 +102,8 @@
     <string name="elevated_waiting">Чекаємо на бездротове налагодження. Увімкніть його в параметрах розробника.</string>
     <string name="elevated_starting">Запуск…</string>
     <string name="elevated_running">Увімкнено: миша й клавіатура ПК працюють як справжній сенсорний екран і клавіатура.</string>
+    <string name="elevated_running_wireless">Увімкнено (запущено через бездротове налагодження).</string>
+    <string name="elevated_running_usb">Увімкнено (запущено через налагодження USB).</string>
     <string name="elevated_failed">Не вдалося запустити. Перевірте, чи ввімкнено бездротове налагодження, і спробуйте ще раз.</string>
     <string name="elevated_not_paired">Телефон забув спарювання з NectarLink. Налаштуйте його знову.</string>
     <string name="elevated_start_with">Запускати через</string>

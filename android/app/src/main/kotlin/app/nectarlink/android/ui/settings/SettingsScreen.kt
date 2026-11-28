@@ -1794,17 +1794,19 @@ private fun ElevatedAccess() {
                 Text(stringResource(R.string.elevated_title), style = MaterialTheme.typography.titleSmall)
                 Text(
                     stringResource(
-                        when (state) {
+                        when (val status = state) {
                             Elevated.State.NotSetUp -> R.string.elevated_not_set_up
                             Elevated.State.Waiting ->
                                 if (Elevated.usesShizuku()) R.string.elevated_shizuku_waiting else R.string.elevated_waiting
                             Elevated.State.Starting -> R.string.elevated_starting
-                            Elevated.State.Running -> when {
-                                Elevated.rootActive -> R.string.elevated_running_root
-                                Elevated.shizukuActive -> R.string.elevated_running_shizuku
-                                else -> R.string.elevated_running
+                            is Elevated.State.Running -> when (status.backend) {
+                                Elevated.Backend.WirelessDebugging -> R.string.elevated_running_wireless
+                                Elevated.Backend.UsbDebugging -> R.string.elevated_running_usb
+                                Elevated.Backend.Root -> R.string.elevated_running_root
+                                Elevated.Backend.Shizuku -> R.string.elevated_running_shizuku
+                                Elevated.Backend.SystemService -> R.string.elevated_running
                             }
-                            is Elevated.State.Failed -> when ((state as Elevated.State.Failed).reason) {
+                            is Elevated.State.Failed -> when (status.reason) {
                                 Elevated.Reason.NotPaired -> R.string.elevated_not_paired
                                 Elevated.Reason.RootDenied -> R.string.elevated_root_failed
                                 Elevated.Reason.ShizukuNotRunning -> R.string.elevated_shizuku_not_running
@@ -1843,7 +1845,7 @@ private fun ElevatedAccess() {
                 }) {
                     Text(stringResource(R.string.elevated_try_again))
                 }
-                Elevated.State.Running -> OutlinedButton(onClick = { scope.launch { Elevated.forget() } }) {
+                is Elevated.State.Running -> OutlinedButton(onClick = { scope.launch { Elevated.forget() } }) {
                     Text(stringResource(R.string.elevated_turn_off))
                 }
                 Elevated.State.Starting -> {}
@@ -1893,7 +1895,7 @@ private fun ElevatedAccess() {
         // Shizuku and root only show when the phone has them, and nothing asks for
         // either until the user picks it and taps Set up. To change the way it
         // started, turn it off first.
-        if (methods.size > 1 && state != Elevated.State.Running && state != Elevated.State.Starting) {
+        if (methods.size > 1 && state !is Elevated.State.Running && state != Elevated.State.Starting) {
             Text(stringResource(R.string.elevated_start_with), style = MaterialTheme.typography.labelMedium)
             Choice(
                 options = methods.map { option ->

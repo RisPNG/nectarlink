@@ -103,6 +103,8 @@
     <string name="elevated_waiting">Kablosuz hata ayıklama bekleniyor. Geliştirici seçenekleri\'nden açın.</string>
     <string name="elevated_starting">Başlatılıyor…</string>
     <string name="elevated_running">Açık: bilgisayarınızın faresi ve klavyesi gerçek bir dokunmatik ekran ve klavye gibi çalışır.</string>
+    <string name="elevated_running_wireless">Açık (kablosuz hata ayıklama ile başlatıldı).</string>
+    <string name="elevated_running_usb">Açık (USB hata ayıklama ile başlatıldı).</string>
     <string name="elevated_failed">Başlatılamadı. Kablosuz hata ayıklamanın açık olduğunu kontrol edip tekrar deneyin.</string>
     <string name="elevated_not_paired">Telefon NectarLink\'in eşleştirmesini unuttu. Yeniden kurun.</string>
     <string name="elevated_start_with">Şununla başlat</string>
