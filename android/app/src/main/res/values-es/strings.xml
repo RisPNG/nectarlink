@@ -103,6 +103,8 @@
     <string name="elevated_waiting">Esperando la depuración inalámbrica. Actívala en Opciones de desarrollador.</string>
     <string name="elevated_starting">Iniciando…</string>
     <string name="elevated_running">Activado: el ratón y el teclado de tu PC funcionan como una pantalla táctil y un teclado reales.</string>
+    <string name="elevated_running_wireless">Activado (inicio mediante depuración inalámbrica).</string>
+    <string name="elevated_running_usb">Activado (inicio mediante depuración USB).</string>
     <string name="elevated_failed">No se pudo iniciar. Comprueba que la depuración inalámbrica esté activada e inténtalo de nuevo.</string>
     <string name="elevated_not_paired">El teléfono ha olvidado el emparejamiento de NectarLink. Configúralo de nuevo.</string>
     <string name="elevated_start_with">Iniciar con</string>

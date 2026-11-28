@@ -38,6 +38,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -66,10 +67,12 @@ object Elevated {
         /** Set up, but wireless debugging is off (or the phone isn't on Wi-Fi). */
         data object Waiting : State
         data object Starting : State
-        data object Running : State
+        data class Running(val backend: Backend) : State
         /** Pairing or starting failed. */
         data class Failed(val reason: Reason) : State
     }
+
+    enum class Backend { WirelessDebugging, UsbDebugging, Root, Shizuku, SystemService }
 
     enum class Reason { WrongCode, NoPairingDialog, NotPaired, RootDenied, ShizukuNotRunning, ShizukuDenied, ShizukuRoot, Other }
 
@@ -313,12 +316,13 @@ object Elevated {
                     is NectarlinkServiceClient.ConnectionState.Connected -> {
                         serviceStatus = conn.status
                         callAudioSupported = conn.status.callAudioSupported || input != null
-                        _state.value = if (input != null || romServiceHasAllCapabilities()) {
-                            State.Running
-                        } else if (isSetUp()) {
-                            State.Waiting
-                        } else {
-                            State.NotSetUp
+                        _state.update { state ->
+                            when {
+                                input != null -> state
+                                romServiceHasAllCapabilities() -> State.Running(Backend.SystemService)
+                                isSetUp() -> State.Waiting
+                                else -> State.NotSetUp
+                            }
                         }
                         cancelRetry()
                         onChange()
@@ -342,7 +346,7 @@ object Elevated {
                     }
                     NectarlinkServiceClient.ConnectionState.Disconnected,
                     NectarlinkServiceClient.ConnectionState.Unavailable -> {
-                        val wasRunning = _state.value == State.Running
+                        val wasRunning = _state.value is State.Running
                         serviceStatus = null
                         callAudioSupported = false
                         if (input == null && (wasRunning || !isSetUp())) {
@@ -693,15 +697,14 @@ object Elevated {
             check(first.startsWith("ready ") && port != null) {
                 "root helper said ${first.ifEmpty { "nothing" }}"
             }
-            rootActive = true
-            connectSocketLocked(port, token)
+            connectSocketLocked(port, token, Backend.Root)
             Thread {
                 runCatching { output.lineSequence().forEach { line -> Log.d(TAG, "root-helper: $line") } }
                 if (rootProcess === proc) {
                     input = null
                     rootActive = false
                     runCatching { socket?.close() }
-                    if (_state.value == State.Running) _state.value = State.Waiting
+                    if (_state.value is State.Running) _state.value = State.Waiting
                     onChange()
                     scheduleRetry()
                 }
@@ -733,8 +736,7 @@ object Elevated {
             return false
         }
         return runCatching {
-            shizukuActive = true
-            connectSocketLocked(port, token)
+            connectSocketLocked(port, token, Backend.Shizuku)
             Log.i(TAG, "started through Shizuku")
             true
         }.getOrElse {
@@ -862,27 +864,29 @@ object Elevated {
         val first = output.readLine().orEmpty()
         val port = first.removePrefix("ready ").toIntOrNull()
         check(first.startsWith("ready ") && port != null) { "the helper said ${first.ifEmpty { "nothing" }}" }
-        connectSocketLocked(port, token)
+        connectSocketLocked(port, token, Backend.WirelessDebugging)
         // Watches the helper: when its shell ends, Elevated stops.
         Thread {
             runCatching { output.lineSequence().forEach { line -> Log.d(TAG, "helper: $line") } }
             if (shell === stream) {
                 input = null
                 runCatching { socket?.close() }
-                if (_state.value == State.Running) _state.value = if (isSetUp()) State.Waiting else State.NotSetUp
+                if (_state.value is State.Running) _state.value = if (isSetUp()) State.Waiting else State.NotSetUp
                 onChange()
                 scheduleRetry()
             }
         }.start()
     }
 
-    private fun connectSocketLocked(port: Int, token: String) {
+    private fun connectSocketLocked(port: Int, token: String, backend: Backend) {
         val local = HelperProof.open(port, token, "H", PROOF_MS)
         helper = port to token
         socket = local
         val writer = OutputStreamWriter(local.outputStream, Charsets.UTF_8)
+        rootActive = backend == Backend.Root
+        shizukuActive = backend == Backend.Shizuku
         input = writer
-        _state.value = State.Running
+        _state.value = State.Running(backend)
         if (screenOffRequested) send(writer, "P 0")
         send(writer, "W ${if (clipboardWatchWanted) 1 else 0}")
         compileIfUpdated()
@@ -919,7 +923,7 @@ object Elevated {
                 input = null
                 shizukuActive = false
                 runCatching { local.close() }
-                if (_state.value == State.Running) _state.value = if (isSetUp()) State.Waiting else State.NotSetUp
+                if (_state.value is State.Running) _state.value = if (isSetUp()) State.Waiting else State.NotSetUp
                 onChange()
                 scheduleRetry()
             }
@@ -985,7 +989,7 @@ object Elevated {
         val token = ByteArray(24).also(SecureRandom()::nextBytes).joinToString("") { "%02x".format(it) }
         val port = app.core.elevatedUsbStart(context.applicationInfo.sourceDir, token, grants()) ?: return false
         return runCatching {
-            connectSocketLocked(port, token)
+            connectSocketLocked(port, token, Backend.UsbDebugging)
             Log.i(TAG, "started over USB")
             cancelRetry()
             true

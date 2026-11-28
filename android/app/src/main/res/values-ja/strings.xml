@@ -103,6 +103,8 @@
     <string name="elevated_waiting">ワイヤレス デバッグを待機中です。「開発者向けオプション」で有効にしてください。</string>
     <string name="elevated_starting">開始中…</string>
     <string name="elevated_running">オン：PCのマウスとキーボードが、本物のタッチスクリーンやキーボードのように動作します。</string>
+    <string name="elevated_running_wireless">オン（ワイヤレス デバッグで起動）。</string>
+    <string name="elevated_running_usb">オン（USB デバッグで起動）。</string>
     <string name="elevated_failed">起動できませんでした。ワイヤレス デバッグがオンになっているか確認し、再度お試しください。</string>
     <string name="elevated_not_paired">スマートフォンがNectarLinkのペアリングを忘れてしまいました。再度設定してください。</string>
     <string name="elevated_start_with">起動方法</string>

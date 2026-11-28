@@ -103,6 +103,8 @@
     <string name="elevated_waiting">Aguardando a depuração por Wi-Fi. Ative nas Opções do desenvolvedor.</string>
     <string name="elevated_starting">Iniciando…</string>
     <string name="elevated_running">Ativado: o mouse e o teclado do PC funcionam como uma tela touch e um teclado de verdade.</string>
+    <string name="elevated_running_wireless">Ativado (iniciado pela depuração por Wi-Fi).</string>
+    <string name="elevated_running_usb">Ativado (iniciado pela depuração USB).</string>
     <string name="elevated_failed">Não foi possível iniciar. Confira se a depuração por Wi-Fi está ativada e tente de novo.</string>
     <string name="elevated_not_paired">O celular esqueceu o pareamento do NectarLink. Configure de novo.</string>
     <string name="elevated_start_with">Iniciar com</string>

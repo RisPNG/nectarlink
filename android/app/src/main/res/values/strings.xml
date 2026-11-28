@@ -103,6 +103,8 @@
     <string name="elevated_waiting">Waiting for Wireless debugging. Turn it on in Developer options.</string>
     <string name="elevated_starting">Starting…</string>
     <string name="elevated_running">On: your PC\'s mouse and keyboard work like a real touchscreen and keyboard.</string>
+    <string name="elevated_running_wireless">On (started through Wireless debugging).</string>
+    <string name="elevated_running_usb">On (started through USB debugging).</string>
     <string name="elevated_failed">Couldn\'t start it. Check that Wireless debugging is on, then try again.</string>
     <string name="elevated_not_paired">The phone forgot NectarLink\'s pairing. Set it up again.</string>
     <string name="elevated_start_with">Start it with</string>

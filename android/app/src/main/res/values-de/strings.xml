@@ -103,6 +103,8 @@
     <string name="elevated_waiting">Warte auf Kabelloses Debugging. Aktiviere es in den Entwickleroptionen.</string>
     <string name="elevated_starting">Wird gestartet…</string>
     <string name="elevated_running">Ein: Maus und Tastatur deines PCs funktionieren wie ein echter Touchscreen und eine echte Tastatur.</string>
+    <string name="elevated_running_wireless">Ein (über kabelloses Debugging gestartet).</string>
+    <string name="elevated_running_usb">Ein (über USB-Debugging gestartet).</string>
     <string name="elevated_failed">Start fehlgeschlagen. Prüfe, ob Kabelloses Debugging aktiviert ist, und versuche es erneut.</string>
     <string name="elevated_not_paired">Das Gerät hat die Kopplung mit NectarLink vergessen. Richte sie erneut ein.</string>
     <string name="elevated_start_with">Starten mit</string>

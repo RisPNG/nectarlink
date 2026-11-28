@@ -103,6 +103,8 @@
     <string name="elevated_waiting">Oczekiwanie na debugowanie bezprzewodowe. Włącz je w opcjach programisty.</string>
     <string name="elevated_starting">Uruchamianie…</string>
     <string name="elevated_running">Włączone: mysz i klawiatura komputera działają jak prawdziwy ekran dotykowy i klawiatura.</string>
+    <string name="elevated_running_wireless">Włączone (uruchomiono przez debugowanie bezprzewodowe).</string>
+    <string name="elevated_running_usb">Włączone (uruchomiono przez debugowanie USB).</string>
     <string name="elevated_failed">Nie udało się uruchomić. Sprawdź, czy debugowanie bezprzewodowe jest włączone, i spróbuj ponownie.</string>
     <string name="elevated_not_paired">Telefon zapomniał parowanie z NectarLink. Skonfiguruj je ponownie.</string>
     <string name="elevated_start_with">Uruchom przez</string>

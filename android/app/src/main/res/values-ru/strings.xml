@@ -97,6 +97,8 @@
     <string name="elevated_waiting">Ожидание отладки по Wi-Fi. Включите её в параметрах для разработчиков.</string>
     <string name="elevated_starting">Запуск…</string>
     <string name="elevated_running">Вкл.: мышь и клавиатура ПК работают как настоящий сенсорный экран и клавиатура.</string>
+    <string name="elevated_running_wireless">Включено (запущено через отладку по Wi-Fi).</string>
+    <string name="elevated_running_usb">Включено (запущено через отладку по USB).</string>
     <string name="elevated_failed">Не удалось запустить. Проверьте, что отладка по Wi-Fi включена, и попробуйте снова.</string>
     <string name="elevated_not_paired">Телефон забыл связь с NectarLink. Настройте её заново.</string>
     <string name="elevated_start_with">Запускать через</string>
