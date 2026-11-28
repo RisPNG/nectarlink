@@ -92,6 +92,8 @@ const BASE_CAPABILITIES: &[&str] = &[
     nectarlink_protocol::messages::UPDATE_HINT,
     nectarlink_protocol::messages::mirror::PACE,
     nectarlink_protocol::messages::diag::REPORT,
+    crate::notifications::HIDE,
+    nectarlink_protocol::messages::chat::CAP,
 ];
 
 /// This device's mutable description, sent to peers.
@@ -1544,6 +1546,7 @@ impl Shared {
             }
             shared.send_media_state(&s).await;
             shared.send_held_notifications(&s).await;
+            shared.send_hidden_apps(&s).await;
             shared.send_notification_snapshot(&s).await;
             shared.send_call_state(&s).await;
             shared.send_toggles_state(&s).await;
@@ -4313,6 +4316,14 @@ impl Node {
         self.shared.hold_notifications(held).await;
     }
 
+    /// On a PC: the apps (package names) hidden here (#701). Phones that offer
+    /// `notify.hide` keep those apps' notifications to themselves; the list
+    /// goes to each phone now and whenever one connects.
+    pub async fn set_hidden_notification_apps(&self, apps: Vec<String>) {
+        let apps = nectarlink_protocol::messages::NotifyHide { apps }.sanitized();
+        self.shared.set_hidden_apps(apps).await;
+    }
+
     pub async fn notification_posted(&self, notification: Notification) {
         if let Some(clean) = notification.clone().sanitized() {
             let mut hist = lock(&self.shared.notification_history);
@@ -4443,6 +4454,18 @@ impl Node {
     /// when this device offers `deck.actions`.
     pub async fn set_deck_layout(&self, layout: crate::DeckLayout) -> Result<()> {
         self.shared.set_deck_layout(layout).await
+    }
+
+    /// Gives phones this PC's Deck tile pictures (#490): PNGs of at most
+    /// [`crate::deck_image::MAX_BYTES`] and [`crate::deck_image::MAX_SIDE`]
+    /// pixels a side, named in the layout by [`crate::deck::image_id`].
+    pub fn set_deck_images(&self, images: Vec<Vec<u8>>) {
+        self.shared.deck.set_local_images(images);
+    }
+
+    /// The picture `id` on a connected PC's Deck tile, once this phone has it.
+    pub fn deck_image(&self, peer: DeviceId, id: &str) -> Option<Vec<u8>> {
+        self.shared.deck.peer_image(&peer, id).map(|png| png.to_vec())
     }
 
     /// Updates this PC's live Deck state and sends it to every connected phone
@@ -4707,6 +4730,62 @@ impl Node {
         for session in self.shared.live_sessions() {
             self.shared.send_deck(&session).await;
         }
+    }
+
+    // ---- Chat (docs/protocol/chat.md) ----
+
+    /// Sends a note to `peer` in the chat between them (#698) and puts it on
+    /// this device's timeline; returns its ID. `peer` has to be connected and
+    /// offer `chat.messages`.
+    pub async fn send_chat(&self, peer: DeviceId, text: String) -> Result<String> {
+        use nectarlink_protocol::messages::{ChatMessage, chat};
+        let note = ChatMessage { id: crate::chat::new_id(), text };
+        if !note.is_valid() {
+            return Err(Error::Protocol("a chat note needs text, at most 8,192 characters".into()));
+        }
+        if !self.shared.offers(&peer, chat::CAP)? {
+            return Err(Error::Unsupported);
+        }
+        self.request(peer, Envelope::new(types::CHAT_MESSAGE, &note)?).await?.expect(types::OK)?;
+        crate::chat::record(&self.shared, peer, false, &note.id, &note.text);
+        Ok(note.id)
+    }
+
+    /// Changes the text of a note this device sent `peer`. Here at once; on
+    /// `peer` if it's connected.
+    pub async fn edit_chat(&self, peer: DeviceId, id: String, text: String) -> Result<()> {
+        let edit = nectarlink_protocol::messages::ChatEdit { id, text };
+        if !edit.is_valid() {
+            return Err(Error::Protocol("a chat note needs text, at most 8,192 characters".into()));
+        }
+        if !self.shared.store.edit_chat_note(&peer, &crate::chat::ref_id(&edit.id), false, &edit.text)? {
+            return Err(Error::NotFound);
+        }
+        self.shared.emit(NodeEvent::TimelineChanged);
+        if let Some(session) = self.shared.session(&peer)
+            && let Ok(env) = Envelope::new(types::CHAT_EDIT, &edit)
+        {
+            let _ = session.send(env).await;
+        }
+        Ok(())
+    }
+
+    /// Deletes a note in the chat with `peer`, either one's. Here at once; on
+    /// `peer` if it's connected.
+    pub async fn delete_chat(&self, peer: DeviceId, id: String) -> Result<()> {
+        let delete = nectarlink_protocol::messages::ChatDelete { id };
+        if !delete.is_valid()
+            || !self.shared.store.delete_chat_note(&peer, &crate::chat::ref_id(&delete.id))?
+        {
+            return Err(Error::NotFound);
+        }
+        self.shared.emit(NodeEvent::TimelineChanged);
+        if let Some(session) = self.shared.session(&peer)
+            && let Ok(env) = Envelope::new(types::CHAT_DELETE, &delete)
+        {
+            let _ = session.send(env).await;
+        }
+        Ok(())
     }
 
     // ---- Timeline ----

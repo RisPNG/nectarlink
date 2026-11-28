@@ -18,12 +18,14 @@ mod battery;
 mod bridge;
 mod call_audio;
 mod calls;
+mod chat;
 mod clipboard;
 mod command_palette;
 mod continuity_camera;
 mod core_host;
 mod crash_events;
 mod deck;
+mod deck_images;
 mod doctor;
 mod feed;
 mod folder_sync;
@@ -116,6 +118,15 @@ const BUNDLED_FONTS: i32 = 4;
 struct DesktopPlatform;
 
 impl Platform for DesktopPlatform {
+    /// A phone cleared one of this PC's forwarded notifications (#705).
+    fn dismiss_notification(&self, key: &str) -> Result<(), nectarlink_core::NotificationError> {
+        if pc_notifications::dismiss(key) {
+            Ok(())
+        } else {
+            Err(nectarlink_core::NotificationError::NotFound)
+        }
+    }
+
     fn diag_facts(&self) -> Option<(nectarlink_core::diag::report::DeviceFacts, Vec<(String, String)>)> {
         Some(bridge::report::own_facts())
     }
@@ -532,6 +543,19 @@ fn parse_options_from<I: IntoIterator<Item = std::ffi::OsString>>(iter: I) -> Op
         let tel = launch::telephone_number(uri).ok_or(());
         return Options { tel: Some(tel), data_dir: options.data_dir, ..Options::default() };
     }
+    // Text links (sms:, mms:) from an older registration: never sent on to a
+    // phone as what's copied, which a web page could pick.
+    #[cfg(target_os = "linux")]
+    if options.send_to.is_none()
+        && share_targets.is_empty()
+        && let [uri] = paths.as_slice()
+        && let Some(uri) = uri.to_str()
+        && ["sms:", "smsto:", "mms:", "mmsto:"]
+            .iter()
+            .any(|scheme| uri.get(..scheme.len()).is_some_and(|start| start.eq_ignore_ascii_case(scheme)))
+    {
+        paths.clear();
+    }
     if let Some((_, files)) = &mut options.send_to {
         *files = paths;
         // Sending doesn't need the window.
@@ -855,6 +879,13 @@ fn main() -> ExitCode {
     core_host::host().hub.update(|s| {
         notification_store::load(&data_dir, s);
         state::Changes::APPS | state::Changes::HISTORY
+    });
+    // Once the rules are loaded: the apps hidden here stay on the phones (#701).
+    // Until then the core sends phones nothing, so they keep what they were told last.
+    core_host::spawn(async {
+        if core_host::wait_for_node().await.is_some() {
+            notifications::send_hidden_apps();
+        }
     });
     notification_store::start(data_dir.clone());
     std::thread::spawn(notifications::prune_images);

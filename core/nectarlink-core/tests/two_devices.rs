@@ -1615,11 +1615,13 @@ async fn usb_only_closes_a_lan_session_refuses_new_ones_and_lets_the_pc_back_whe
     wait_online(&mut phone, pc_id).await;
     wait_online(&mut pc, phone_id).await;
     // Both sides dial once USB only is off, so the first session can be the
-    // duplicate that closes right after it comes up: ring over the one that stays.
+    // duplicate that closes right after it comes up. The one that stays takes
+    // over without the link going offline, so no new "online" comes: try the
+    // ring again for a moment instead of waiting for one.
     with_timeout("ring after USB only is off", async {
         loop {
             match pc.node.ring(phone_id, true).await {
-                Err(Error::Offline) => wait_online(&mut pc, phone_id).await,
+                Err(Error::Offline) => tokio::time::sleep(Duration::from_millis(200)).await,
                 result => break result,
             }
         }
@@ -2002,6 +2004,189 @@ async fn a_held_pc_gets_no_notifications_and_catches_up_afterwards() {
         _ => None,
     })
     .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_phone_clears_a_notification_the_pc_forwarded() {
+    let mut pc = device("Desktop", DeviceKind::Desktop).await;
+    let mut phone = device("Pixel", DeviceKind::Phone).await;
+    pair_qr(&mut pc, &mut phone).await;
+    let (pc_id, phone_id) = (pc.node.device_id(), phone.node.device_id());
+    // The phone shows the PC's notifications.
+    phone.node.update_power(PowerLevel::Basic, vec!["notify.show".into()]).await;
+    with_timeout("phone shows notifications", async {
+        while !pc.node.peer_offers(phone_id, "notify.show") {
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await;
+    // The PC forwards its own notification; it offers no notification actions.
+    pc.node.notification_posted(note("pc:win:1:1", "pc.windows", "Rule ran", false)).await;
+    wait_for(&mut phone, "the PC's notification", |e| match e {
+        NodeEvent::NotificationPosted { device, notification } if *device == pc_id => {
+            (notification.key == "pc:win:1:1").then_some(())
+        }
+        NodeEvent::NotificationsReset { device, items } if *device == pc_id => {
+            items.iter().any(|n| n.key == "pc:win:1:1").then_some(())
+        }
+        _ => None,
+    })
+    .await;
+    // Cleared on the phone: the PC hears of it, so it can take it out of its list.
+    with_timeout("dismiss", phone.node.dismiss_notification(pc_id, "pc:win:1:1".into()))
+        .await
+        .expect("a dismiss needs no notify.reply");
+    assert_eq!(*pc.platform.dismissed.lock().unwrap(), vec!["pc:win:1:1".to_owned()]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn apps_hidden_on_the_pc_keep_their_notifications_on_the_phone() {
+    let mut pc = device("Desktop", DeviceKind::Desktop).await;
+    let mut phone = device("Pixel", DeviceKind::Phone).await;
+    pair_qr(&mut pc, &mut phone).await;
+    let phone_id = phone.node.device_id();
+    grant_notification_access(&phone).await;
+    phone
+        .node
+        .notifications_reset(vec![note("a", "com.chat", "Sam", false), note("b", "com.secret", "Pin", false)])
+        .await;
+    wait_for(&mut pc, "both", |e| match e {
+        NodeEvent::NotificationsReset { device, items } if *device == phone_id && items.len() == 2 => {
+            Some(())
+        }
+        _ => None,
+    })
+    .await;
+
+    // Hidden on the PC: the phone sends that app's notifications no more, and
+    // the PC's list loses the one it had.
+    pc.node.set_hidden_notification_apps(vec!["com.secret".into()]).await;
+    wait_for(&mut pc, "without the hidden app", |e| match e {
+        NodeEvent::NotificationsReset { device, items } if *device == phone_id && items.len() == 1 => {
+            assert_eq!(items[0].app, "com.chat");
+            Some(())
+        }
+        _ => None,
+    })
+    .await;
+    phone.node.notification_posted(note("c", "com.secret", "Code", false)).await;
+    phone.node.notification_removed("b".into()).await;
+    phone.node.notification_posted(note("d", "com.chat", "Alex", false)).await;
+    wait_for(&mut pc, "the shown app's post", |e| match e {
+        NodeEvent::NotificationPosted { device, notification } if *device == phone_id => {
+            assert_ne!(notification.app, "com.secret", "a hidden app's notification left the phone");
+            (notification.key == "d").then_some(())
+        }
+        // A key names its app: a hidden app's removal stays on the phone too.
+        NodeEvent::NotificationRemoved { device, key } if *device == phone_id => {
+            assert_ne!(key, "b", "a hidden app's removal left the phone");
+            None
+        }
+        _ => None,
+    })
+    .await;
+
+    // Kept by the phone across a restart: nothing of the hidden app goes over
+    // when it reconnects and sends what it shows.
+    phone.node.shutdown().await;
+    let TestDevice { node: old_node, dir, .. } = phone;
+    drop(old_node);
+    let mut phone = start_in(dir, "Pixel", DeviceKind::Phone).await;
+    grant_notification_access(&phone).await;
+    wait_online(&mut phone, pc.node.device_id()).await;
+    phone
+        .node
+        .notifications_reset(vec![
+            note("e", "com.secret", "Code", false),
+            note("f", "com.chat", "Kim", false),
+        ])
+        .await;
+    wait_for(&mut pc, "after the restart", |e| match e {
+        NodeEvent::NotificationsReset { device, items } if *device == phone_id => {
+            assert!(
+                items.iter().all(|n| n.app != "com.secret"),
+                "a hidden app's notification left the phone"
+            );
+            items.iter().any(|n| n.key == "f").then_some(())
+        }
+        NodeEvent::NotificationPosted { device, notification } if *device == phone_id => {
+            assert_ne!(notification.app, "com.secret", "a hidden app's notification left the phone");
+            None
+        }
+        _ => None,
+    })
+    .await;
+
+    // Shown again: its notifications come back.
+    pc.node.set_hidden_notification_apps(Vec::new()).await;
+    wait_for(&mut pc, "the app shown again", |e| match e {
+        NodeEvent::NotificationsReset { device, items } if *device == phone_id => {
+            items.iter().any(|n| n.key == "e").then_some(())
+        }
+        _ => None,
+    })
+    .await;
+}
+
+fn chat_notes(dev: &TestDevice, peer: nectarlink_core::DeviceId) -> Vec<(bool, String)> {
+    let page = dev
+        .node
+        .timeline_page(&nectarlink_core::TimelineQuery {
+            kind: Some(nectarlink_core::TimelineKind::Message),
+            device: Some(peer),
+            ..nectarlink_core::TimelineQuery::default()
+        })
+        .unwrap();
+    page.entries.into_iter().map(|e| (e.incoming, e.detail)).collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_chat_between_two_devices_sends_edits_and_deletes_notes() {
+    let mut pc = device("Desktop", DeviceKind::Desktop).await;
+    let mut phone = device("Pixel", DeviceKind::Phone).await;
+    pair_qr(&mut pc, &mut phone).await;
+    let (pc_id, phone_id) = (pc.node.device_id(), phone.node.device_id());
+
+    let id = with_timeout("send", phone.node.send_chat(pc_id, "on my way".into())).await.expect("sent");
+    let received = wait_for(&mut pc, "the note", |e| match e {
+        NodeEvent::ChatReceived { device, id, text } if *device == phone_id => {
+            Some((id.clone(), text.clone()))
+        }
+        _ => None,
+    })
+    .await;
+    assert_eq!(received, (id.clone(), "on my way".to_owned()));
+    assert_eq!(chat_notes(&pc, phone_id), vec![(true, "on my way".to_owned())]);
+    assert_eq!(chat_notes(&phone, pc_id), vec![(false, "on my way".to_owned())]);
+
+    // Its writer changes it; the other device can't.
+    let not_mine =
+        with_timeout("edit someone else's", pc.node.edit_chat(phone_id, id.clone(), "hacked".into())).await;
+    assert!(matches!(not_mine, Err(Error::NotFound)), "{not_mine:?}");
+    with_timeout("edit", phone.node.edit_chat(pc_id, id.clone(), "on my way, 5 min".into()))
+        .await
+        .expect("edited");
+    with_timeout("edit arrives", async {
+        while chat_notes(&pc, phone_id) != vec![(true, "on my way, 5 min".to_owned())] {
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await;
+
+    // Either deletes it, on both.
+    with_timeout("delete", pc.node.delete_chat(phone_id, id.clone())).await.expect("deleted");
+    assert!(chat_notes(&pc, phone_id).is_empty());
+    with_timeout("delete arrives", async {
+        while !chat_notes(&phone, pc_id).is_empty() {
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await;
+    let gone = with_timeout("gone", phone.node.delete_chat(pc_id, id)).await;
+    assert!(matches!(gone, Err(Error::NotFound)), "{gone:?}");
+
+    let empty = with_timeout("empty", phone.node.send_chat(pc_id, "  ".into())).await;
+    assert!(matches!(empty, Err(Error::Protocol(_))), "{empty:?}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -4890,6 +5075,61 @@ async fn wake_info_syncs_persists_respects_toggle_and_sends_magic_packet() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_deck_tiles_picture_reaches_the_phone_checked_against_its_id() {
+    use nectarlink_core::{DECK_ACTIONS, DeckConfig, deck::image_id};
+
+    // Only the header is read by the core: enough for a 64 x 64 PNG.
+    let png = |seed: u8| {
+        let mut bytes = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec();
+        bytes.extend_from_slice(&64u32.to_be_bytes());
+        bytes.extend_from_slice(&64u32.to_be_bytes());
+        bytes.extend_from_slice(&[seed; 200]);
+        bytes
+    };
+    let (picture, too_big) = (png(1), vec![0x89; 100_000]);
+    let mut pc = device_with("Desktop", DeviceKind::Desktop, &[DECK_ACTIONS]).await;
+    let mut phone = device("Pixel", DeviceKind::Phone).await;
+
+    let mut cfg = DeckConfig::default_deck();
+    cfg.pages[0].tiles[0].image = Some(image_id(&picture));
+    // A picture the PC doesn't have: that tile keeps its icon.
+    cfg.pages[0].tiles[1].image = Some(image_id(&png(2)));
+    pc.node.set_deck_images(vec![picture.clone(), too_big]);
+    pc.node.set_deck_layout(cfg.to_wire_layout()).await.unwrap();
+
+    pair_qr(&mut pc, &mut phone).await;
+    let pc_id = pc.node.device_id();
+    let id = image_id(&picture);
+    // The layout arrives, then again once its picture is here.
+    for _ in 0..3 {
+        if phone.node.deck_image(pc_id, &id).is_some() {
+            break;
+        }
+        wait_for(&mut phone, "a deck layout", |e| match e {
+            NodeEvent::DeckLayout { device, .. } if *device == pc_id => Some(()),
+            _ => None,
+        })
+        .await;
+    }
+    assert_eq!(phone.node.deck_image(pc_id, &id), Some(picture));
+    assert_eq!(phone.node.deck_image(pc_id, &image_id(&png(2))), None);
+
+    // Taken off the tile: the phone lets it go with the next layout.
+    cfg.pages[0].tiles[0].image = None;
+    pc.node.set_deck_layout(cfg.to_wire_layout()).await.unwrap();
+    wait_for(&mut phone, "the layout without it", |e| match e {
+        NodeEvent::DeckLayout { device, layout }
+            if *device == pc_id && layout.pages[0].tiles[0].image.is_none() =>
+        {
+            Some(())
+        }
+        _ => None,
+    })
+    .await;
+    assert_eq!(phone.node.deck_image(pc_id, &id), None);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn deck_layout_and_state_arrive_press_runs_action_and_respects_toggles_and_unknown_tile() {
     use nectarlink_core::{
         DECK_ACTIONS, DeckAction, DeckConfig, DeckLayout, DeckState, DeckTileConfig, deck_colors, deck_icons,
@@ -4900,6 +5140,7 @@ async fn deck_layout_and_state_arrive_press_runs_action_and_respects_toggles_and
 
     let mut cfg = DeckConfig::default_deck();
     cfg.pages[0].tiles.push(DeckTileConfig {
+        image: None,
         id: "run_build".into(),
         label: "Build".into(),
         icon: deck_icons::TERMINAL.into(),
@@ -9223,6 +9464,14 @@ async fn a_bluetooth_link_carries_light_messages_only() {
         (pc, phone);
     pc_node.shutdown().await;
     phone_node.shutdown().await;
+    // Each kept the other's addresses from the first session. The OS can give a
+    // restarted node the port it had (macOS often does), and then the PC dials
+    // it there over the LAN before Bluetooth comes up: forget them.
+    drop((pc_node, phone_node));
+    for dir in [&pc_dir, &phone_dir] {
+        let db = rusqlite::Connection::open(dir.path().join("nectarlink.db")).unwrap();
+        db.execute("UPDATE peers SET last_addrs = ''", []).unwrap();
+    }
     let mut pc = start_usb_device_in(pc_dir, "Desktop BT", DeviceKind::Desktop, None, &[]).await;
     let phone = start_usb_device_in(phone_dir, "Pixel BT", DeviceKind::Phone, None, &["storage.read"]).await;
     assert!(
