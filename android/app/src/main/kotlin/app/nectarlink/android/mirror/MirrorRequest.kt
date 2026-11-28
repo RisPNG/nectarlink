@@ -30,6 +30,8 @@ data class MirrorRequest(
     val screenOff: Boolean = false,
     /** Only the sound: the PC plays it without a window. */
     val soundOnly: Boolean = false,
+    /** Use Android playback capture so a sound-only session leaves local audio playing. */
+    val keepSoundOnPhone: Boolean = false,
 ) {
     fun toIntent(intent: Intent): Intent = intent
         .putExtra("pc", pcId)
@@ -40,6 +42,7 @@ data class MirrorRequest(
         .putExtra("stayAwake", stayAwake)
         .putExtra("screenOff", screenOff)
         .putExtra("soundOnly", soundOnly)
+        .putExtra("keepSoundOnPhone", keepSoundOnPhone)
 
     companion object {
         fun of(intent: Intent): MirrorRequest? = intent.getStringExtra("pc")?.let {
@@ -52,6 +55,7 @@ data class MirrorRequest(
                 intent.getBooleanExtra("stayAwake", false),
                 intent.getBooleanExtra("screenOff", false),
                 intent.getBooleanExtra("soundOnly", false),
+                intent.getBooleanExtra("keepSoundOnPhone", false),
             )
         }
     }

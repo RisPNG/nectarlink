@@ -376,6 +376,8 @@
     <string name="settings_remote">控制你的电脑</string>
     <string name="settings_volume_keys_control_pc">音量键控制电脑</string>
     <string name="settings_volume_keys_control_pc_hint">电脑播放音乐或视频时，手机的音量键会调节电脑的音量。</string>
+    <string name="settings_phone_sound_keep_on_phone">继续在手机上播放声音</string>
+    <string name="settings_phone_sound_keep_on_phone_hint">下次将手机声音共享到电脑时，支持的应用会在两台设备上播放声音。</string>
     <string name="settings_pc_sound_buffer">电脑声音缓冲</string>
     <string name="settings_pc_sound_buffer_hint">如果 Wi-Fi 繁忙时电脑的声音断断续续，加大缓冲可以让它更流畅，但延迟会稍长一些。</string>
     <string name="settings_buffer_low">低</string>

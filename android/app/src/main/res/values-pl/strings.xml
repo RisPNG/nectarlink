@@ -402,6 +402,8 @@
     <string name="settings_remote">Sterowanie komputerem</string>
     <string name="settings_volume_keys_control_pc">Przyciski głośności sterują komputerem</string>
     <string name="settings_volume_keys_control_pc_hint">Gdy komputer odtwarza muzykę lub film, przyciski głośności telefonu zmieniają głośność komputera.</string>
+    <string name="settings_phone_sound_keep_on_phone">Nadal odtwarzaj dźwięk na telefonie</string>
+    <string name="settings_phone_sound_keep_on_phone_hint">Gdy następnym razem udostępnisz dźwięk telefonu na komputerze, dźwięk z obsługiwanych aplikacji będzie odtwarzany na obu urządzeniach.</string>
     <string name="settings_pc_sound_buffer">Bufor dźwięku z komputera</string>
     <string name="settings_pc_sound_buffer_hint">Jeśli dźwięk z komputera przerywa przy obciążonym Wi-Fi, większy bufor go wygładzi, kosztem nieco większego opóźnienia.</string>
     <string name="settings_buffer_low">Niski</string>

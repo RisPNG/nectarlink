@@ -397,6 +397,8 @@
     <string name="settings_remote">Controlar tu PC</string>
     <string name="settings_volume_keys_control_pc">Los botones de volumen controlan tu PC</string>
     <string name="settings_volume_keys_control_pc_hint">Mientras tu PC reproduce música o vídeo, los botones de volumen del teléfono cambian el volumen del PC.</string>
+    <string name="settings_phone_sound_keep_on_phone">Seguir reproduciendo el sonido en el teléfono</string>
+    <string name="settings_phone_sound_keep_on_phone_hint">La próxima vez que compartas el sonido del teléfono con tu PC, el sonido de las aplicaciones compatibles se oirá en ambos dispositivos.</string>
     <string name="settings_pc_sound_buffer">Búfer del sonido del PC</string>
     <string name="settings_pc_sound_buffer_hint">Si el sonido del PC se corta con una Wi-Fi saturada, un búfer mayor lo suaviza, con algo más de retraso.</string>
     <string name="settings_buffer_low">Bajo</string>

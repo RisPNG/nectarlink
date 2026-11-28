@@ -390,6 +390,8 @@
     <string name="settings_remote">Deinen PC steuern</string>
     <string name="settings_volume_keys_control_pc">Lautstärketasten steuern den PC</string>
     <string name="settings_volume_keys_control_pc_hint">Während auf dem PC Musik oder ein Video läuft, ändern die Lautstärketasten des Smartphones die Lautstärke des PCs.</string>
+    <string name="settings_phone_sound_keep_on_phone">Ton weiterhin auf dem Handy abspielen</string>
+    <string name="settings_phone_sound_keep_on_phone_hint">Wenn du das nächste Mal den Ton deines Handys mit dem PC teilst, ist der Ton unterstützter Apps auf beiden Geräten zu hören.</string>
     <string name="settings_pc_sound_buffer">PC-Ton-Puffer</string>
     <string name="settings_pc_sound_buffer_hint">Wenn der Ton vom PC bei vollem WLAN stockt, glättet ein größerer Puffer ihn, mit etwas mehr Verzögerung.</string>
     <string name="settings_buffer_low">Niedrig</string>

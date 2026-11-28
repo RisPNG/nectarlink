@@ -80,10 +80,12 @@ If your desktop PC lacks speakers, or you want to walk around the room while lis
 To hear what your phone plays (music, videos, app sounds) through your PC's speakers or headphones without opening a mirror window, turn on **Phone sound on this PC** on the PC's Home screen.
 
 - If several phones are connected, select the phone’s tab on Home first. The switch shows and controls that phone’s sound. Turning it on for another phone stops the previous phone’s sound.
-- With `Elevated` it starts right away. Otherwise your phone asks first, as it does for mirroring: tap the notification, then allow it. Android's prompt talks about sharing your screen, but only the sound goes to the PC.
+- With `Elevated` and the default playback setting, sharing usually starts right away. When your phone asks for permission, tap the notification and allow it. Android's prompt talks about sharing your screen, but only the sound goes to the PC.
 - It's the same sound mirroring sends: on Android 10 and newer, apps that allow their audio to be captured (most media and games). Calls aren't included.
-- Your phone goes quiet while its sound plays on the PC. Without `Elevated` it turns its media volume down to 0 and back up when you turn this off (if you turned the volume up yourself meanwhile, yours stays).
+- By default, your phone goes quiet while its sound plays on the PC. Without `Elevated` it turns its media volume down to 0 and back up when you turn this off (if you turned the volume up yourself meanwhile, yours stays).
 - Opening the phone's mirror window takes over, since that brings the sound with the picture. Turn it off on the PC, or tap **Stop** on the phone.
+
+To hear eligible media on both devices on Android 10 or newer, turn on **Keep sound playing on the phone** under **Settings › Features & Data › Control your PC** in NectarLink on your phone. Restart **Phone sound on this PC** if it was already on. Android may ask for permission to capture playback even when Elevated is running. Some apps prevent Android from capturing their playback. The phone's media volume keys keep their usual function in this mode.
 
 ### 4. Voice Recorder: Record on Phone, Save on PC
 

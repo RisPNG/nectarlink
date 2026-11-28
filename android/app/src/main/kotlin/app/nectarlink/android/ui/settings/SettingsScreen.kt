@@ -86,6 +86,7 @@ import app.nectarlink.android.elevated.ElevatedMethod
 import app.nectarlink.android.elevated.ShizukuElevated
 import app.nectarlink.services.client.NectarlinkServiceContract
 import app.nectarlink.android.mirror.InputService
+import app.nectarlink.android.mirror.PhoneSoundPlayback
 import app.nectarlink.android.photos.RecentPhotos
 import app.nectarlink.android.sms.PhoneSms
 import app.nectarlink.android.storage.PhoneStorage
@@ -1110,7 +1111,10 @@ fun SettingsScreen(
             }
 
             item(key = "remote", contentType = "section") {
-                Section(stringResource(R.string.settings_remote)) {
+                Section(
+                    title = stringResource(R.string.settings_remote),
+                    highlighted = pulsingSectionKey == "remote",
+                ) {
                     val sensitivityTitle = stringResource(R.string.settings_touchpad_sensitivity)
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         Text(
@@ -1149,6 +1153,31 @@ fun SettingsScreen(
                         )
                     }
                     SettingRowDivider()
+                    if (PhoneSoundPlayback.supported) {
+                        val context = LocalContext.current
+                        var keepOnPhone by remember { mutableStateOf(PhoneSoundPlayback.keepOnPhone(context)) }
+                        val keepOnPhoneTitle = stringResource(R.string.settings_phone_sound_keep_on_phone)
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                                Text(keepOnPhoneTitle, style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    stringResource(R.string.settings_phone_sound_keep_on_phone_hint),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Switch(
+                                checked = keepOnPhone,
+                                onCheckedChange = {
+                                    PhoneSoundPlayback.setKeepOnPhone(context, it)
+                                    keepOnPhone = it
+                                },
+                                colors = app.nectarlink.android.ui.theme.nectarSwitchColors(),
+                                modifier = Modifier.semantics { contentDescription = keepOnPhoneTitle },
+                            )
+                        }
+                        SettingRowDivider()
+                    }
                     // #321: more buffer survives a busy Wi-Fi, less is closer to live.
                     Text(stringResource(R.string.settings_pc_sound_buffer), style = MaterialTheme.typography.titleSmall)
                     Text(

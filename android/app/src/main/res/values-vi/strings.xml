@@ -386,6 +386,8 @@
 <string name="settings_remote">Điều khiển PC của bạn</string>
 <string name="settings_volume_keys_control_pc">Nút âm lượng điều khiển PC</string>
 <string name="settings_volume_keys_control_pc_hint">Khi PC đang phát nhạc hoặc video, nút âm lượng của điện thoại sẽ thay đổi âm lượng của PC.</string>
+    <string name="settings_phone_sound_keep_on_phone">Tiếp tục phát âm thanh trên điện thoại</string>
+    <string name="settings_phone_sound_keep_on_phone_hint">Lần tới khi bạn chia sẻ âm thanh từ điện thoại với PC, âm thanh từ các ứng dụng được hỗ trợ sẽ phát trên cả hai thiết bị.</string>
     <string name="settings_pc_sound_buffer">Bộ đệm âm thanh PC</string>
     <string name="settings_pc_sound_buffer_hint">Nếu âm thanh từ PC bị ngắt quãng khi Wi-Fi đông, bộ đệm lớn hơn sẽ làm mượt, đổi lại trễ hơn một chút.</string>
     <string name="settings_buffer_low">Thấp</string>
