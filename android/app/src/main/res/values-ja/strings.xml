@@ -387,6 +387,8 @@
     <string name="settings_remote">PCを操作する</string>
     <string name="settings_volume_keys_control_pc">音量ボタンでPCを操作</string>
     <string name="settings_volume_keys_control_pc_hint">PCで音楽や動画を再生している間、スマートフォンの音量ボタンでPCの音量を変更できます。</string>
+    <string name="settings_phone_sound_keep_on_phone">スマホでも音を再生し続ける</string>
+    <string name="settings_phone_sound_keep_on_phone_hint">次にスマホの音をPCに共有するとき、対応アプリの音を両方のデバイスで再生します。</string>
     <string name="settings_pc_sound_buffer">PCのサウンドのバッファー</string>
     <string name="settings_pc_sound_buffer_hint">Wi-Fiが混んでいてPCの音が途切れる場合、バッファーを大きくすると、少し遅れが増える代わりに滑らかになります。</string>
     <string name="settings_buffer_low">低</string>

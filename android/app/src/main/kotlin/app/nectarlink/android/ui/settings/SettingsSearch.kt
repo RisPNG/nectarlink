@@ -3,6 +3,7 @@ package app.nectarlink.android.ui.settings
 
 import androidx.annotation.StringRes
 import app.nectarlink.android.R
+import app.nectarlink.android.mirror.PhoneSoundPlayback
 
 /** A setting search can find (#522): the section it's in and its title. */
 internal data class SettingsSearchEntry(val section: String, @StringRes val title: Int)
@@ -11,7 +12,7 @@ internal data class SettingsSearchEntry(val section: String, @StringRes val titl
  * Every setting's title, by section. Built from the titles SettingsScreen
  * shows; a new row's title belongs here too.
  */
-internal val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
+internal val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOfNotNull(
     SettingsSearchEntry("appearance", R.string.settings_appearance),
     SettingsSearchEntry("appearance", R.string.settings_theme),
     SettingsSearchEntry("appearance", R.string.theme_hive),
@@ -73,6 +74,9 @@ internal val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
     SettingsSearchEntry("remote", R.string.settings_remote),
     SettingsSearchEntry("remote", R.string.settings_touchpad_sensitivity),
     SettingsSearchEntry("remote", R.string.settings_volume_keys_control_pc),
+    if (PhoneSoundPlayback.supported) {
+        SettingsSearchEntry("remote", R.string.settings_phone_sound_keep_on_phone)
+    } else null,
     SettingsSearchEntry("remote", R.string.settings_pc_sound_buffer),
     SettingsSearchEntry("localsend", R.string.settings_localsend_title),
     SettingsSearchEntry("localsend", R.string.settings_localsend_subtitle),

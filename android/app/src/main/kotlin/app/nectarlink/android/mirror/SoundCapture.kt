@@ -30,6 +30,7 @@ import app.nectarlink.services.client.NectarlinkServiceContract
 class SoundCapture(
     private val projection: MediaProjection?,
     private val stream: MirrorStream,
+    private val allowElevated: Boolean = true,
     /** Called once the sound stops (the PC stopped listening, or capture failed). */
     private val onEnded: () -> Unit = {},
 ) {
@@ -45,7 +46,7 @@ class SoundCapture(
         running = true
         Thread({
             try {
-                if (running && Elevated.hasCapability(NectarlinkServiceContract.CAP_DEVICE_AUDIO)) {
+                if (running && allowElevated && Elevated.hasCapability(NectarlinkServiceContract.CAP_DEVICE_AUDIO)) {
                     try {
                         Elevated.openAudioStream()?.use { socket ->
                             elevatedSocket = socket

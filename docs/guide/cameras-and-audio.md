@@ -81,11 +81,13 @@ To hear what your phone plays (music, videos, app sounds) through your PC's spea
 
 - On Windows, **Phone sound output** lets you pick an output such as headphones or **CABLE-C Input** before or during playback. NectarLink remembers the choice and uses it for mirroring too. Choose **System default** to use the Windows default. NectarLink also uses the default if it cannot open your chosen device.
 - If several phones are connected, select the phone’s tab on Home first. The switch shows and controls that phone’s sound. Turning it on for another phone stops the previous phone’s sound.
-- With `Elevated` it starts right away. Otherwise your phone asks first, as it does for mirroring: tap the notification, then allow it. Android's prompt talks about sharing your screen, but only the sound goes to the PC.
+- With `Elevated` and the default playback setting, sharing usually starts right away. When your phone asks for permission, tap the notification and allow it. Android's prompt talks about sharing your screen, but only the sound goes to the PC.
 - `Elevated` routes matching Android playback to the PC at a fixed capture gain. Android returns those sounds to the phone when the session closes. Standard capture on Android 10 or newer copies eligible media and game audio and leaves local playback audible.
 - The **Phone sound volume** control on Home changes the PC's playback level. The phone's buttons stay assigned to the phone.
 - Playback resumes after reconnecting if the switch was on. On compatible devices, the switch also routes cellular calls you answer or dial on the phone. See [Calls](calls.md#talking-through-your-pc-windows).
 - Opening the phone's mirror window takes over, since that brings the sound with the picture. Turn it off on the PC, or tap **Stop** on the phone.
+
+To hear eligible media on both devices on Android 10 or newer, turn on **Keep sound playing on the phone** under **Settings › Features & Data › Control your PC** in NectarLink on your phone. Restart **Phone sound on this PC** if it was already on. Android may ask for permission to capture playback even when Elevated is running. Some apps prevent Android from capturing their playback. The phone's media volume keys keep their usual function in this mode.
 
 ### 4. Voice Recorder: Record on Phone, Save on PC
 

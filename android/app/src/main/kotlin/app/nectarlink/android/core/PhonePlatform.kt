@@ -27,6 +27,7 @@ import app.nectarlink.android.mirror.InputService
 import app.nectarlink.android.mirror.MirrorRequest
 import app.nectarlink.android.mirror.MirrorRequests
 import app.nectarlink.android.mirror.MirrorService
+import app.nectarlink.android.mirror.PhoneSoundPlayback
 import app.nectarlink.android.sms.PhoneSms
 import app.nectarlink.android.sms.SmsNotificationMatch
 import app.nectarlink.android.storage.PhoneStorage
@@ -204,6 +205,7 @@ internal class PhonePlatform(
                 options.stayAwake,
                 options.screenOff,
                 options.soundOnly,
+                keepSoundOnPhone = options.soundOnly && PhoneSoundPlayback.keepOnPhone(context),
             )
             // Elevated shares at once, unless the user wants this PC to ask each time.
             val ask = app.nectarlink.android.mirror.MirrorAsk.isOn(context, pcId)

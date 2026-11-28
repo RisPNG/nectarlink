@@ -393,6 +393,8 @@
     <string name="settings_remote">Controlar o PC</string>
     <string name="settings_volume_keys_control_pc">Botões de volume controlam o PC</string>
     <string name="settings_volume_keys_control_pc_hint">Enquanto o PC toca música ou vídeo, os botões de volume do celular mudam o volume do PC.</string>
+    <string name="settings_phone_sound_keep_on_phone">Continuar reproduzindo o som no celular</string>
+    <string name="settings_phone_sound_keep_on_phone_hint">Na próxima vez que você compartilhar o som do celular com o PC, o áudio dos apps compatíveis será reproduzido nos dois dispositivos.</string>
     <string name="settings_pc_sound_buffer">Buffer do som do PC</string>
     <string name="settings_pc_sound_buffer_hint">Se o som do PC falha numa Wi-Fi congestionada, um buffer maior o suaviza, com um pouco mais de atraso.</string>
     <string name="settings_buffer_low">Baixo</string>

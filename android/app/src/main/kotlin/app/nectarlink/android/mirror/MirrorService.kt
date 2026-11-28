@@ -150,7 +150,8 @@ class MirrorService : Service() {
             override fun onStop() = main.post { stopSharing() }.let {}
         }, main)
         if (soundOnly) {
-            scope.launch { startSound(core, pc) }
+            val keepSoundOnPhone = intent.getBooleanExtra(EXTRA_KEEP_SOUND_ON_PHONE, false)
+            scope.launch { startSound(core, pc, keepSoundOnPhone) }
             return START_NOT_STICKY
         }
         scope.launch {
@@ -364,7 +365,7 @@ class MirrorService : Service() {
     }
 
     /** The sound, on a stream of its own; the screen goes on without it if it can't. */
-    private suspend fun startSound(core: app.nectarlink.android.core.Core, pc: String) {
+    private suspend fun startSound(core: app.nectarlink.android.core.Core, pc: String, keepSoundOnPhone: Boolean = false) {
         // Sharing only the sound, there's nothing left once it's gone.
         val endSharing = { main.post { if (soundOnly && pcId == pc) stopSharing() } }
         if (!SoundCapture.canCapture(this)) {
@@ -390,7 +391,7 @@ class MirrorService : Service() {
                 return@post
             }
             lateinit var capture: SoundCapture
-            capture = SoundCapture(running, stream) {
+            capture = SoundCapture(running, stream, allowElevated = !keepSoundOnPhone) {
                 main.post ended@{
                     if (sound !== capture) return@ended
                     sound = null
@@ -486,6 +487,7 @@ class MirrorService : Service() {
         private const val EXTRA_STAY_AWAKE = "stayAwake"
         private const val EXTRA_SCREEN_OFF = "screenOff"
         private const val EXTRA_SOUND_ONLY = "soundOnly"
+        private const val EXTRA_KEEP_SOUND_ON_PHONE = "keepSoundOnPhone"
 
         /** The service sharing the screen now, if any. */
         @Volatile private var current: MirrorService? = null
@@ -513,16 +515,17 @@ class MirrorService : Service() {
                 .putExtra(EXTRA_STAY_AWAKE, request.stayAwake)
                 .putExtra(EXTRA_SCREEN_OFF, request.screenOff)
                 .putExtra(EXTRA_SOUND_ONLY, request.soundOnly)
+                .putExtra(EXTRA_KEEP_SOUND_ON_PHONE, request.keepSoundOnPhone)
             ContextCompat.startForegroundService(context, intent)
         }
 
         /**
-         * Starts full-screen sharing with `request`'s PC immediately through
+         * Starts sharing with `request`'s PC immediately through
          * the Elevated shell helper, without a `MediaProjection` consent prompt.
          */
         fun startElevated(context: Context, request: MirrorRequest): Boolean {
             val capability = if (request.soundOnly) NectarlinkServiceContract.CAP_DEVICE_AUDIO else NectarlinkServiceContract.CAP_SCREEN_MIRROR
-            if (!app.nectarlink.android.elevated.Elevated.hasCapability(capability) || current != null) {
+            if (request.keepSoundOnPhone || !app.nectarlink.android.elevated.Elevated.hasCapability(capability) || current != null) {
                 return false
             }
             val intent = Intent(context, MirrorService::class.java)

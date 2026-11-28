@@ -402,6 +402,8 @@
     <string name="settings_remote">Керування ПК</string>
     <string name="settings_volume_keys_control_pc">Кнопки гучності керують ПК</string>
     <string name="settings_volume_keys_control_pc_hint">Поки на ПК грає музика чи відео, кнопки гучності телефона змінюють гучність ПК.</string>
+    <string name="settings_phone_sound_keep_on_phone">Продовжувати відтворювати звук на телефоні</string>
+    <string name="settings_phone_sound_keep_on_phone_hint">Під час наступного передавання звуку з телефона на ПК звук підтримуваних застосунків відтворюватиметься на обох пристроях.</string>
     <string name="settings_pc_sound_buffer">Буфер звуку ПК</string>
     <string name="settings_pc_sound_buffer_hint">Якщо звук ПК переривається в завантаженій мережі Wi-Fi, більший буфер згладить його ціною трохи більшої затримки.</string>
     <string name="settings_buffer_low">Низький</string>
