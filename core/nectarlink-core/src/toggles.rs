@@ -15,8 +15,9 @@ pub use nectarlink_protocol::messages::{
     PhoneToggleSet, PhoneToggleValue, PhoneToggles, ringer_modes, toggle_ids,
     toggles::{
         BLUETOOTH as TOGGLES_BLUETOOTH, BRIGHTNESS as TOGGLES_BRIGHTNESS, DND as TOGGLES_DND,
-        FLASHLIGHT as TOGGLES_FLASHLIGHT, READ as TOGGLES_READ, RINGER as TOGGLES_RINGER,
-        SHOW as TOGGLES_SHOW, VOLUME as TOGGLES_VOLUME, WIFI as TOGGLES_WIFI,
+        FLASHLIGHT as TOGGLES_FLASHLIGHT, KEEP_SOUND_ON_PHONE as TOGGLES_KEEP_SOUND_ON_PHONE,
+        READ as TOGGLES_READ, RINGER as TOGGLES_RINGER, SHOW as TOGGLES_SHOW, VOLUME as TOGGLES_VOLUME,
+        WIFI as TOGGLES_WIFI,
     },
 };
 use nectarlink_protocol::{DeviceId, Envelope, ErrorCode, messages::types};
@@ -72,6 +73,7 @@ pub fn required_capability(id: &str) -> Option<&'static str> {
         toggle_ids::WIFI | toggle_ids::HOTSPOT => TOGGLES_WIFI,
         toggle_ids::BLUETOOTH => TOGGLES_BLUETOOTH,
         toggle_ids::PC_ACTIVE => TOGGLES_READ,
+        toggle_ids::KEEP_SOUND_ON_PHONE => TOGGLES_KEEP_SOUND_ON_PHONE,
         _ => return None,
     })
 }

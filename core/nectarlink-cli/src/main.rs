@@ -1451,6 +1451,7 @@ fn sample_toggles() -> nectarlink_core::PhoneToggles {
         brightness: 70,
         wifi: true,
         bluetooth: true,
+        keep_sound_on_phone: None,
     })
     .clone()
 }

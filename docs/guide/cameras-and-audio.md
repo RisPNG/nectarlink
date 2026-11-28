@@ -85,7 +85,7 @@ To hear what your phone plays (music, videos, app sounds) through your PC's spea
 - By default, your phone goes quiet while its sound plays on the PC. Without `Elevated` it turns its media volume down to 0 and back up when you turn this off (if you turned the volume up yourself meanwhile, yours stays).
 - Opening the phone's mirror window takes over, since that brings the sound with the picture. Turn it off on the PC, or tap **Stop** on the phone.
 
-To hear eligible media on both devices on Android 10 or newer, turn on **Keep sound playing on the phone** under **Settings › Features & Data › Control your PC** in NectarLink on your phone. Restart **Phone sound on this PC** if it was already on. Android may ask for permission to capture playback even when Elevated is running. Some apps prevent Android from capturing their playback. The phone's media volume keys keep their usual function in this mode.
+To hear eligible media on both devices on Android 10 or newer, turn on **Keep sound playing on the phone** in **Phone controls** on the PC's Home screen. The same setting is available under **Settings › Features & Data › Control your PC** in NectarLink on your phone. Restart **Phone sound on this PC** if it was already on. Android may ask for permission to capture playback even when Elevated is running. Some apps prevent Android from capturing their playback. The phone's media volume keys keep their usual function in this mode.
 
 ### 4. Voice Recorder: Record on Phone, Save on PC
 

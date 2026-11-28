@@ -1022,6 +1022,8 @@ pub struct PhoneToggles {
     pub brightness: u8,
     pub wifi: bool,
     pub bluetooth: bool,
+    /// `None` when keeping local playback is unsupported.
+    pub keep_sound_on_phone: Option<bool>,
 }
 
 impl From<core::PhoneToggles> for PhoneToggles {
@@ -1034,6 +1036,7 @@ impl From<core::PhoneToggles> for PhoneToggles {
             brightness: t.brightness,
             wifi: t.wifi,
             bluetooth: t.bluetooth,
+            keep_sound_on_phone: t.keep_sound_on_phone,
         }
     }
 }
@@ -1048,6 +1051,7 @@ impl From<PhoneToggles> for core::PhoneToggles {
             brightness: t.brightness,
             wifi: t.wifi,
             bluetooth: t.bluetooth,
+            keep_sound_on_phone: t.keep_sound_on_phone,
         }
     }
 }

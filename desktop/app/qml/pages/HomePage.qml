@@ -1955,13 +1955,22 @@ Item {
                 property bool expanded: false
                 property bool confirmWifiOff: false
                 property bool hotspotActive: false
+                property bool keepSoundChangePending: false
                 property var hoveredLockedFeature: null
                 // The phone doesn't report its hotspot, so this is only ever what was asked.
                 Connections {
                     target: AppController
                     function onPhoneToggleFailed(device, id) {
-                        if (device === home.deviceId && id === "hotspot")
+                        if (device !== home.deviceId)
+                            return
+                        if (id === "hotspot")
                             phoneControls.hotspotActive = !phoneControls.hotspotActive
+                        else if (id === "keep_sound_on_phone")
+                            phoneControls.keepSoundChangePending = false
+                    }
+                    function onPhoneSoundPreferenceApplied(device) {
+                        if (device === home.deviceId)
+                            phoneControls.keepSoundChangePending = false
                     }
                 }
                 readonly property var state: {
@@ -2118,16 +2127,37 @@ Item {
 
                     // The phone's sound out of this PC's speakers, without a mirror window.
                     SwitchBar {
+                        id: phoneSoundSwitch
                         readonly property string sound: MediaList.revision >= 0 ? MediaList.phoneSoundState(home.deviceId) : "off"
                         width: parent.width
                         visible: sound !== "off" || (home.online && home.feature("mirroring.sound").state === "available")
+                        enabled: checked || !phoneControls.keepSoundChangePending
                         iconPath: Icons.music
                         title: qsTr("Phone sound on this PC")
                         checked: sound !== "off"
                         caption: sound === "playing" ? qsTr("Playing %1's sound").arg(home.name)
                             : sound === "asking" ? qsTr("Allow it on %1").arg(home.name)
                             : ""
-                        onToggled: (on) => MediaList.setPhoneSound(home.deviceId, on)
+                        onToggled: (on) => {
+                            if (!on || !phoneControls.keepSoundChangePending)
+                                MediaList.setPhoneSound(home.deviceId, on)
+                        }
+                    }
+
+                    SwitchBar {
+                        readonly property var setting: phoneControls.state ? phoneControls.state.keep_sound_on_phone : undefined
+                        width: parent.width
+                        visible: phoneSoundSwitch.visible && typeof setting === "boolean"
+                        enabled: !phoneControls.keepSoundChangePending
+                        iconPath: Icons.phone
+                        title: qsTr("Keep sound playing on the phone")
+                        caption: phoneSoundSwitch.checked ? qsTr("Applies to the next session") : ""
+                        checked: setting === true
+                        onToggled: (on) => {
+                            if (visible && enabled)
+                                phoneControls.keepSoundChangePending =
+                                    AppController.setPhoneToggle(home.deviceId, "keep_sound_on_phone", String(on))
+                        }
                     }
 
                     // How loud it plays here, apart from the PC's own volume (#577).

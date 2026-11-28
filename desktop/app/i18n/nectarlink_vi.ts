@@ -5943,6 +5943,16 @@ Nó cần gì
         <translation>Âm thanh điện thoại trên PC này</translation>
     </message>
     <message>
+        <location filename="../qml/pages/HomePage.qml" line="2153"/>
+        <source>Keep sound playing on the phone</source>
+        <translation>Tiếp tục phát âm thanh trên điện thoại</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/HomePage.qml" line="2154"/>
+        <source>Applies to the next session</source>
+        <translation>Áp dụng từ phiên tiếp theo</translation>
+    </message>
+    <message>
         <location filename="../qml/pages/HomePage.qml" line="2089"/>
         <source>Playing %1&apos;s sound</source>
         <translation>Đang phát âm thanh của %1</translation>

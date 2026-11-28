@@ -5942,6 +5942,16 @@ Windows のあらゆるアプリからスマートフォンのカメラを起動
         <translation>このPCでのスマートフォンのサウンド</translation>
     </message>
     <message>
+        <location filename="../qml/pages/HomePage.qml" line="2153"/>
+        <source>Keep sound playing on the phone</source>
+        <translation>スマホでも音を再生し続ける</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/HomePage.qml" line="2154"/>
+        <source>Applies to the next session</source>
+        <translation>次の共有から適用</translation>
+    </message>
+    <message>
         <location filename="../qml/pages/HomePage.qml" line="2089"/>
         <source>Playing %1&apos;s sound</source>
         <translation>%1のサウンドを再生中</translation>
