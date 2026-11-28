@@ -5971,6 +5971,16 @@ What it needs
         <translation>手机控制</translation>
     </message>
     <message>
+        <location filename="../qml/pages/HomePage.qml" line="2029"/>
+        <source>Elevated on</source>
+        <translation>高级权限已开启</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/HomePage.qml" line="2029"/>
+        <source>Elevated off</source>
+        <translation>高级权限已关闭</translation>
+    </message>
+    <message>
         <location filename="../qml/pages/HomePage.qml" line="1983"/>
         <source>Less</source>
         <translation>收起</translation>

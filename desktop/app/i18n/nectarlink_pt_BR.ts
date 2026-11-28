@@ -5958,6 +5958,16 @@ O que precisa
         <translation>Controles do celular</translation>
     </message>
     <message>
+        <location filename="../qml/pages/HomePage.qml" line="2029"/>
+        <source>Elevated on</source>
+        <translation>Elevated ativado</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/HomePage.qml" line="2029"/>
+        <source>Elevated off</source>
+        <translation>Elevated desativado</translation>
+    </message>
+    <message>
         <location filename="../qml/pages/HomePage.qml" line="1983"/>
         <source>Less</source>
         <translation>Menos</translation>

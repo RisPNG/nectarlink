@@ -5857,6 +5857,16 @@ What it needs
         <translation>Керування телефоном</translation>
     </message>
     <message>
+        <location filename="../qml/pages/HomePage.qml" line="2029"/>
+        <source>Elevated on</source>
+        <translation>Elevated увімкнено</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/HomePage.qml" line="2029"/>
+        <source>Elevated off</source>
+        <translation>Elevated вимкнено</translation>
+    </message>
+    <message>
         <location filename="../qml/pages/HomePage.qml" line="1983"/>
         <source>Less</source>
         <translation>Менше</translation>

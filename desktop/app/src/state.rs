@@ -129,7 +129,7 @@ impl From<PairedDevice> for DeviceView {
             paired_at: d.paired_at,
             link: d.link,
             battery: None,
-            power: PowerLevel::Basic,
+            power: PowerLevel::Unknown,
             reconnect: d.reconnect,
         }
     }

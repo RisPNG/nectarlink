@@ -5564,6 +5564,16 @@ What it needs
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../../qml/pages/HomePage.qml" line="2029"/>
+        <source>Elevated on</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../qml/pages/HomePage.qml" line="2029"/>
+        <source>Elevated off</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../../qml/pages/HomePage.qml" line="1983"/>
         <source>Less</source>
         <translation type="unfinished"></translation>

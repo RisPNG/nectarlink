@@ -5971,6 +5971,16 @@ Neler gerekir
         <translation>Telefon kontrolleri</translation>
     </message>
     <message>
+        <location filename="../qml/pages/HomePage.qml" line="2029"/>
+        <source>Elevated on</source>
+        <translation>Yükseltilmiş mod açık</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/HomePage.qml" line="2029"/>
+        <source>Elevated off</source>
+        <translation>Yükseltilmiş mod kapalı</translation>
+    </message>
+    <message>
         <location filename="../qml/pages/HomePage.qml" line="1983"/>
         <source>Less</source>
         <translation>Daha az</translation>

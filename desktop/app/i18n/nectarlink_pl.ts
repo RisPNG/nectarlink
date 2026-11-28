@@ -5913,6 +5913,16 @@ Wymagania
         <translation>Sterowanie telefonem</translation>
     </message>
     <message>
+        <location filename="../qml/pages/HomePage.qml" line="2029"/>
+        <source>Elevated on</source>
+        <translation>Podwyższone uprawnienia włączone</translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/HomePage.qml" line="2029"/>
+        <source>Elevated off</source>
+        <translation>Podwyższone uprawnienia wyłączone</translation>
+    </message>
+    <message>
         <location filename="../qml/pages/HomePage.qml" line="1983"/>
         <source>Less</source>
         <translation>Mniej</translation>
