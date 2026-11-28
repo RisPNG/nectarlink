@@ -658,6 +658,13 @@ change things that need a step from you, and its notes say so.
 
 ### Fixed
 
+- **A clipboard picture that couldn't be previewed no longer keeps a CPU core busy.** The PC
+  tried to make its preview again and again, hundreds of times a second, for as long as it ran.
+  Thanks to [@leeefun](https://github.com/leeefun) ([#730](https://github.com/thtbee/nectarlink/issues/730)).
+- **The PC app opens faster, and both apps are smaller.** The window shows in about 0.3 s
+  instead of 0.6 s (the icon, Jump List and What's new check no longer hold it up), the Windows
+  installer is 2 MB smaller, and the phone app is about 9 MB smaller. On x86_64 Chromebooks that
+  also run Android ARM apps, the phone app starts again: it carried no core for that kind of chip.
 - **A phone asks before it plays the PC's sound.** Use phone as speaker, turned on from a phone,
   sent everything the PC played, calls included, to that phone without a word on the PC. The first
   time a phone asks, the PC now asks you, and remembers a phone you allow.
@@ -670,6 +677,10 @@ change things that need a step from you, and its notes say so.
   pairing over USB is declined or fails, it needs pairing mode for a few minutes. With a PC still
   on 0.1.5 or older, plugging in no longer pairs by itself: pair by QR code or the 6-digit code
   instead, or update the PC.
+- **Faster sharing.** Big files move up to about 75% faster once going, a transfer starts two to
+  three times sooner (files are hashed on several threads, and phone files while they're copied),
+  the USB cable's tunnel carries about twice as much, and a copied text or link no longer waits
+  for a file transfer to the same device to finish.
 - **Typing in other languages and pasting work in phone app windows.** On Android 14 and newer an
   app window runs on its own virtual device with a clipboard of its own, so text typed with an
   input method, and anything pasted, went to the phone's clipboard where the app couldn't see it.

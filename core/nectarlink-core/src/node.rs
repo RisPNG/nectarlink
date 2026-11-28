@@ -281,7 +281,8 @@ pub(crate) struct Shared {
     /// Wakes the persistent send-queue coordinator when items are enqueued, retried, or sessions change.
     pub(crate) queue_notify: Arc<Notify>,
     /// Peers currently being drained by a per-peer queue runner task.
-    pub(crate) queue_active_peers: Mutex<std::collections::HashSet<DeviceId>>,
+    /// Each device and lane whose queue is being worked through now.
+    pub(crate) queue_active_peers: Mutex<std::collections::HashSet<(DeviceId, crate::store::QueueLane)>>,
     /// Number of wake-up ticks executed by `run_queue_coordinator`.
     pub(crate) queue_coordinator_ticks: std::sync::atomic::AtomicUsize,
     pub data_dir: std::path::PathBuf,
@@ -3015,12 +3016,6 @@ impl Node {
     }
 
     /// Cancels all active (`Waiting` or `Sending`) items in the outgoing send queue
-    /// for `peer` and returns the number of items cancelled.
-    pub fn cancel_queue_for_peer(&self, peer: DeviceId) -> Result<u32> {
-        self.cancel_all_queue_items(Some(peer))
-    }
-
-    /// Cancels all active (`Waiting` or `Sending`) items in the outgoing send queue
     /// (optionally filtered to `peer`) and returns the number of items cancelled.
     pub fn cancel_all_queue_items(&self, peer: Option<DeviceId>) -> Result<u32> {
         let items = self.shared.store.list_send_queue(peer.as_ref())?;
@@ -3191,7 +3186,7 @@ impl Node {
             }
         });
         let rtf = rtf.filter(|s| !s.trim().is_empty()).filter(|s| used.saturating_add(s.len()) <= max);
-        let has_queue = self.shared.store.has_active_queue_for_peer(&peer).unwrap_or(false);
+        let has_queue = self.shared.store.has_active_messages_for_peer(&peer).unwrap_or(false);
         if !has_queue && self.shared.session(&peer).is_some() {
             let env = Envelope::new(
                 types::CLIP_SET,
@@ -3288,7 +3283,7 @@ impl Node {
             let session = self.connected(&peer)?;
             return crate::clipboard::send_image(&self.shared, &session, mime, bytes).await;
         }
-        let has_queue = self.shared.store.has_active_queue_for_peer(&peer).unwrap_or(false);
+        let has_queue = self.shared.store.has_active_messages_for_peer(&peer).unwrap_or(false);
         if !has_queue && let Some(session) = self.shared.session(&peer) {
             match crate::clipboard::send_image(&self.shared, &session, mime.clone(), bytes.clone()).await {
                 Ok(()) => return Ok(()),
@@ -3934,17 +3929,6 @@ impl Node {
     ) -> Result<()> {
         let session = self.connected(peer.borrow())?;
         crate::sms::send(&self.shared, &session, to, body, attachments, None).await
-    }
-
-    /// Alias for [`Node::send_sms_with_attachments`].
-    pub async fn sms_send_with_attachments(
-        &self,
-        peer: impl std::borrow::Borrow<DeviceId>,
-        to: Vec<String>,
-        body: String,
-        attachments: Vec<crate::SmsAttachment>,
-    ) -> Result<()> {
-        self.send_sms_with_attachments(peer, to, body, attachments).await
     }
 
     /// A picture in a message: its type and bytes.
@@ -4608,19 +4592,6 @@ impl Node {
         Ok((meta, buf))
     }
 
-    /// Convenience alias for [`Node::storage_read`] taking `&DeviceId`, `&str`,
-    /// `offset`, and `length`.
-    pub async fn read_storage(
-        &self,
-        peer: &DeviceId,
-        path: &str,
-        offset: u64,
-        length: u64,
-    ) -> Result<Vec<u8>> {
-        let (_meta, bytes) = self.storage_read(*peer, path, offset, Some(length)).await?;
-        Ok(bytes)
-    }
-
     /// Opens a ranged read stream from `path` on a connected phone
     /// (`storage.read`), returning the metadata and raw QUIC receive stream.
     pub async fn storage_read_stream(
@@ -4879,16 +4850,6 @@ impl Node {
             Self::resolve_timeline_link(entry);
         }
         Ok(page)
-    }
-
-    /// Returns one timeline entry by ID, resolving its linked clip if any.
-    pub fn timeline_entry(&self, id: i64) -> Result<Option<crate::TimelineEntry>> {
-        let mut entry = self.shared.store.get_timeline(id)?;
-        if let Some(ref mut e) = entry {
-            self.resolve_timeline_clip(e);
-            Self::resolve_timeline_link(e);
-        }
-        Ok(entry)
     }
 
     /// Records a custom local timeline entry (e.g. a saved mirror screenshot or
@@ -5607,12 +5568,13 @@ fn add_internet_lookups(endpoint: &Endpoint) -> Result<()> {
 struct ActivePeerQueueGuard {
     weak: Weak<Shared>,
     peer: DeviceId,
+    lane: crate::store::QueueLane,
 }
 
 impl Drop for ActivePeerQueueGuard {
     fn drop(&mut self) {
         if let Some(shared) = self.weak.upgrade() {
-            lock(&shared.queue_active_peers).remove(&self.peer);
+            lock(&shared.queue_active_peers).remove(&(self.peer, self.lane));
             if shared.session(&self.peer).is_some()
                 && shared.store.has_active_queue_for_peer(&self.peer).unwrap_or(false)
             {
@@ -5639,15 +5601,15 @@ fn run_queue_coordinator(weak: Weak<Shared>, cancel: CancellationToken) {
             if shared.store.expire_stale_queue_items(now_ms).unwrap_or(0) > 0 {
                 shared.emit(NodeEvent::QueueChanged);
             }
-            if let Ok(peers) = shared.store.peers_with_waiting_queue() {
-                for peer in peers {
+            if let Ok(lanes) = shared.store.lanes_with_waiting_items() {
+                for (peer, lane) in lanes {
                     if shared.session(&peer).is_some() {
-                        let should_spawn = lock(&shared.queue_active_peers).insert(peer);
+                        let should_spawn = lock(&shared.queue_active_peers).insert((peer, lane));
                         if should_spawn {
                             let peer_weak = weak.clone();
                             let peer_cancel = cancel.child_token();
                             tokio::spawn(async move {
-                                run_peer_queue(peer_weak, peer, peer_cancel).await;
+                                run_peer_queue(peer_weak, peer, lane, peer_cancel).await;
                             });
                         }
                     }
@@ -5675,8 +5637,14 @@ fn run_queue_coordinator(weak: Weak<Shared>, cancel: CancellationToken) {
     });
 }
 
-async fn run_peer_queue(weak: Weak<Shared>, peer: DeviceId, cancel: CancellationToken) {
-    let _guard = ActivePeerQueueGuard { weak: weak.clone(), peer };
+/// Works through one lane of `peer`'s queue, oldest first, while it's online.
+async fn run_peer_queue(
+    weak: Weak<Shared>,
+    peer: DeviceId,
+    lane: crate::store::QueueLane,
+    cancel: CancellationToken,
+) {
+    let _guard = ActivePeerQueueGuard { weak: weak.clone(), peer, lane };
     loop {
         if cancel.is_cancelled() {
             return;
@@ -5697,7 +5665,7 @@ async fn run_peer_queue(weak: Weak<Shared>, peer: DeviceId, cancel: Cancellation
             return;
         };
 
-        let head = match shared.store.head_waiting_item_for_peer(&peer) {
+        let head = match shared.store.head_waiting_item_for_peer(&peer, lane) {
             Ok(Some(h)) => h,
             Ok(None) => return,
             Err(e) => {
