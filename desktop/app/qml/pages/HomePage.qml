@@ -1965,8 +1965,10 @@ Item {
                             return
                         if (id === "hotspot")
                             phoneControls.hotspotActive = !phoneControls.hotspotActive
-                        else if (id === "keep_sound_on_phone")
+                        else if (id === "keep_sound_on_phone") {
+                            keepSoundSwitch.requestedSetting = undefined
                             phoneControls.keepSoundChangePending = false
+                        }
                     }
                     function onPhoneSoundPreferenceApplied(device) {
                         if (device === home.deviceId)
@@ -2139,24 +2141,47 @@ Item {
                             : sound === "asking" ? qsTr("Allow it on %1").arg(home.name)
                             : ""
                         onToggled: (on) => {
-                            if (!on || !phoneControls.keepSoundChangePending)
+                            if (!on || !phoneControls.keepSoundChangePending) {
+                                keepSoundSwitch.sessionSetting = on ? keepSoundSwitch.confirmedSetting : undefined
                                 MediaList.setPhoneSound(home.deviceId, on)
+                            }
                         }
                     }
 
                     SwitchBar {
+                        id: keepSoundSwitch
                         readonly property var setting: phoneControls.state ? phoneControls.state.keep_sound_on_phone : undefined
+                        // The acknowledgement can arrive before the updated phone snapshot.
+                        property var requestedSetting
+                        readonly property var confirmedSetting: !phoneControls.keepSoundChangePending && typeof requestedSetting === "boolean"
+                            ? requestedSetting : setting
+                        readonly property string sound: phoneSoundSwitch.sound
+                        readonly property bool hasSession: sound === "asking" || sound === "playing"
+                        property var sessionSetting
+                        onSettingChanged: requestedSetting = undefined
+                        onSoundChanged: {
+                            if (sound === "asking" || (sound === "playing" && sessionSetting === undefined))
+                                sessionSetting = confirmedSetting
+                            else if (sound !== "playing")
+                                sessionSetting = undefined
+                        }
+                        onConfirmedSettingChanged: {
+                            if (hasSession && sessionSetting === undefined)
+                                sessionSetting = confirmedSetting
+                        }
                         width: parent.width
                         visible: phoneSoundSwitch.visible && typeof setting === "boolean"
                         enabled: !phoneControls.keepSoundChangePending
                         iconPath: Icons.phone
                         title: qsTr("Keep sound playing on the phone")
-                        caption: phoneSoundSwitch.checked ? qsTr("Applies to the next session") : ""
-                        checked: setting === true
+                        caption: hasSession && typeof sessionSetting === "boolean" && typeof confirmedSetting === "boolean"
+                            && confirmedSetting !== sessionSetting ? qsTr("Applies to the next session") : ""
+                        checked: confirmedSetting === true
                         onToggled: (on) => {
-                            if (visible && enabled)
-                                phoneControls.keepSoundChangePending =
-                                    AppController.setPhoneToggle(home.deviceId, "keep_sound_on_phone", String(on))
+                            if (visible && enabled && AppController.setPhoneToggle(home.deviceId, "keep_sound_on_phone", String(on))) {
+                                phoneControls.keepSoundChangePending = true
+                                requestedSetting = on
+                            }
                         }
                     }
 
