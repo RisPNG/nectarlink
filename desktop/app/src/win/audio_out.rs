@@ -17,12 +17,13 @@ use std::{
     time::Duration,
 };
 
+use tokio::sync::watch;
 use windows::Win32::{
     Foundation::{CloseHandle, HANDLE},
     Media::Audio::{
         AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM, AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
-        AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY, IAudioClient, IAudioRenderClient, IMMDeviceEnumerator,
-        MMDeviceEnumerator, WAVE_FORMAT_PCM, WAVEFORMATEX, eConsole, eRender,
+        AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY, DEVICE_STATE_ACTIVE, IAudioClient, IAudioRenderClient,
+        IMMDeviceEnumerator, MMDeviceEnumerator, WAVE_FORMAT_PCM, WAVEFORMATEX, eConsole, eRender,
     },
     System::{
         Com::{CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoUninitialize},
@@ -100,14 +101,16 @@ impl Player {
     pub fn start_on(device: Option<String>, rate: u32, channels: u16) -> std::io::Result<Player> {
         let (queue, packets) = sync_channel(QUEUE);
         std::thread::Builder::new().name("mirror-sound".into()).spawn(move || {
+            let mut endpoint = device.as_deref();
             let mut attempts = 0;
             // The device can go away (headphones unplugged): start over on
             // the new default, a few times.
             while attempts < 5 {
-                match play(device.as_deref(), rate, channels, &packets) {
+                match play(endpoint, rate, channels, &packets) {
                     Ok(()) => return,
                     Err(e) => {
                         tracing::warn!(error = %e, "the sound stopped; trying the default device again");
+                        endpoint = None;
                         attempts += 1;
                         std::thread::sleep(Duration::from_millis(300));
                     }
@@ -123,6 +126,39 @@ impl Player {
         if let Err(TrySendError::Full(_)) = self.queue.try_send(data) {
             tracing::debug!("a sound packet was dropped");
         }
+    }
+}
+
+/// Plays one PCM stream and follows its selected output without reopening the source.
+pub(crate) struct RoutedPlayer {
+    output: watch::Receiver<Option<String>>,
+    rate: u32,
+    channels: u16,
+    player: Player,
+}
+
+impl RoutedPlayer {
+    pub(crate) fn start(
+        mut output: watch::Receiver<Option<String>>,
+        rate: u32,
+        channels: u16,
+    ) -> std::io::Result<Self> {
+        let player = match output.borrow_and_update().clone() {
+            None => Player::start(rate, channels),
+            selected => Player::start_on(selected, rate, channels),
+        }?;
+        Ok(Self { output, rate, channels, player })
+    }
+
+    pub(crate) fn push(&mut self, data: Vec<u8>) {
+        if self.output.has_changed().unwrap_or_default() {
+            let endpoint = self.output.borrow_and_update().clone();
+            match Player::start_on(endpoint, self.rate, self.channels) {
+                Ok(player) => self.player = player,
+                Err(error) => tracing::warn!(%error, "can't move the audio to another output"),
+            }
+        }
+        self.player.push(data);
     }
 }
 
@@ -235,7 +271,9 @@ fn render(
     // GetBuffer and ReleaseBuffer.
     unsafe {
         let devices: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
-        let chosen = device.and_then(|id| devices.GetDevice(&windows::core::HSTRING::from(id)).ok());
+        let chosen = device
+            .and_then(|id| devices.GetDevice(&windows::core::HSTRING::from(id)).ok())
+            .filter(|device| device.GetState().ok() == Some(DEVICE_STATE_ACTIVE));
         let device = match chosen {
             Some(device) => device,
             None => devices.GetDefaultAudioEndpoint(eRender, eConsole)?,

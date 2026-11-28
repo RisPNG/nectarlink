@@ -1495,6 +1495,37 @@
     </message>
 </context>
 <context>
+    <name>CallOutputSheet</name>
+    <message>
+        <location filename="../qml/components/CallOutputSheet.qml" line="8"/>
+        <source>Output for calls</source>
+        <translation>Aramalar için çıkış</translation>
+    </message>
+    <message>
+        <location filename="../qml/components/CallOutputSheet.qml" line="10"/>
+        <source>System default</source>
+        <translation>Sistem varsayılanı</translation>
+    </message>
+    <message>
+        <location filename="../qml/components/CallOutputSheet.qml" line="43"/>
+        <source>Close</source>
+        <translation>Kapat</translation>
+    </message>
+</context>
+<context>
+    <name>CallVolumeSlider</name>
+    <message>
+        <location filename="../qml/components/CallVolumeSlider.qml" line="7"/>
+        <source>Call volume</source>
+        <translation>Arama ses düzeyi</translation>
+    </message>
+    <message>
+        <location filename="../qml/components/CallVolumeSlider.qml" line="8"/>
+        <source>%1%</source>
+        <translation>%%1</translation>
+    </message>
+</context>
+<context>
     <name>CaptionButtons</name>
     <message>
         <location filename="../qml/components/CaptionButtons.qml" line="27"/>

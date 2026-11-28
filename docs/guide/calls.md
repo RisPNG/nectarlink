@@ -53,6 +53,8 @@ With `Elevated` on Android 13 or newer, the call in progress can move to your PC
 
 Use headphones if you can: on speakers, your PC's microphone also picks up the other person.
 
+On Windows, use **Output for calls** and **Call volume** in **Home › Phone controls** or **Settings › Camera & Audio › Calls through this PC**. You can set them before a call or change them while it plays on the PC. The call card's volume buttons adjust this same PC level while the call is routed there. Phone media and the phone's own volume have separate controls. **System default** uses the Windows default playback device. NectarLink also uses that device if the selected output is disconnected or unavailable.
+
 Calls use Windows' default communications microphone. To pick another one, go to **Settings › Camera & Audio › Microphone for calls**; a change applies to a call that's already on the PC too.
 
 If Windows' default communications microphone is off or missing, NectarLink uses the default microphone instead. If NectarLink says Windows keeps it off the microphone, turn on **Settings › Privacy & security › Microphone › Let desktop apps access your microphone** in Windows.

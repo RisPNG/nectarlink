@@ -12,7 +12,20 @@ QtObject {
     property bool controls: false
     property string caller: ""
     property string number: ""
+    property string callOutputs: "[]"
+    property string callOutput: ""
+    property int callPlaybackVolume: 100
+    property int outputRefreshes: 0
+    property int savedCallVolume: -1
+
     function answer() {}
     function end() {}
     function setMute(on) {}
+    function refreshCallOutputs() { outputRefreshes++ }
+    function chooseCallOutput(id) { callOutput = id }
+    function setCallPlaybackVolume(level, done) {
+        callPlaybackVolume = level
+        if (done)
+            savedCallVolume = level
+    }
 }

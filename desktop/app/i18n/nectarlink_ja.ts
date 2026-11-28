@@ -1480,6 +1480,37 @@
     </message>
 </context>
 <context>
+    <name>CallOutputSheet</name>
+    <message>
+        <location filename="../qml/components/CallOutputSheet.qml" line="8"/>
+        <source>Output for calls</source>
+        <translation>通話用出力</translation>
+    </message>
+    <message>
+        <location filename="../qml/components/CallOutputSheet.qml" line="10"/>
+        <source>System default</source>
+        <translation>システムデフォルト</translation>
+    </message>
+    <message>
+        <location filename="../qml/components/CallOutputSheet.qml" line="43"/>
+        <source>Close</source>
+        <translation>閉じる</translation>
+    </message>
+</context>
+<context>
+    <name>CallVolumeSlider</name>
+    <message>
+        <location filename="../qml/components/CallVolumeSlider.qml" line="7"/>
+        <source>Call volume</source>
+        <translation>通話音量</translation>
+    </message>
+    <message>
+        <location filename="../qml/components/CallVolumeSlider.qml" line="8"/>
+        <source>%1%</source>
+        <translation>%1%</translation>
+    </message>
+</context>
+<context>
     <name>CaptionButtons</name>
     <message>
         <location filename="../qml/components/CaptionButtons.qml" line="27"/>

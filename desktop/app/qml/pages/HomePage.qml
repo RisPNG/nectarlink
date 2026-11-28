@@ -2186,6 +2186,53 @@ Item {
                         }
                     }
 
+                    Column {
+                        visible: Qt.platform.os === "windows"
+                        width: parent.width
+                        spacing: 4
+
+                        Divider { width: parent.width }
+                        Button {
+                            variant: "outline"
+                            size: "sm"
+                            iconPath: Icons.speaker
+                            text: callOutputSheet.title
+                            onClicked: callOutputSheet.openForCalls()
+                        }
+
+                        Item {
+                            width: parent.width
+                            height: 20
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 6
+                                Icon {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 15; height: 15
+                                    path: callVolumeSlider.value === 0 ? Icons.soundOff : Icons.speaker
+                                    color: Theme.surfaceContent
+                                }
+                                Txt {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    role: "bodySmall"
+                                    text: callVolumeSlider.label
+                                }
+                            }
+                            Txt {
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                role: "caption"
+                                muted: true
+                                text: callVolumeSlider.valueText
+                            }
+                        }
+
+                        CallVolumeSlider {
+                            id: callVolumeSlider
+                            width: parent.width
+                        }
+                    }
+
                     LockChip {
                         visible: label.length > 0
                         feature: phoneControls.activeLockFeature
@@ -2915,6 +2962,8 @@ Item {
     }
 
     // Set a custom PC-side nickname for a phone.
+    CallOutputSheet { id: callOutputSheet }
+
     Sheet {
         id: nicknameSheet
         property string targetDeviceId: ""

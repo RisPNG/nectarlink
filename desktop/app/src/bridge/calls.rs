@@ -78,6 +78,12 @@ pub mod qobject {
         #[qproperty(QString, call_mics, cxx_name = "callMics")]
         /// The microphone calls record on this PC (an id from `callMics`), or `""`.
         #[qproperty(QString, call_mic, cxx_name = "callMic")]
+        /// The PC's playback devices, as JSON `[{ id, name }]` (after `refreshCallOutputs`).
+        #[qproperty(QString, call_outputs, cxx_name = "callOutputs")]
+        /// The saved call playback endpoint, or `""` for the system default.
+        #[qproperty(QString, call_output, cxx_name = "callOutput")]
+        /// The PC playback level for routed calls.
+        #[qproperty(i32, call_playback_volume, cxx_name = "callPlaybackVolume", READ, NOTIFY)]
         type PhoneCall = super::PhoneCallRust;
     }
 
@@ -151,6 +157,18 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "chooseCallMic"]
         fn choose_call_mic(self: Pin<&mut PhoneCall>, id: &QString);
+        /// Lists the PC's call playback devices again.
+        #[qinvokable]
+        #[cxx_name = "refreshCallOutputs"]
+        fn refresh_call_outputs(self: Pin<&mut PhoneCall>);
+        /// Calls play through this output from now on.
+        #[qinvokable]
+        #[cxx_name = "chooseCallOutput"]
+        fn choose_call_output(self: Pin<&mut PhoneCall>, id: &QString);
+        /// Applies the call playback level now and saves it once settled.
+        #[qinvokable]
+        #[cxx_name = "setCallPlaybackVolume"]
+        fn set_call_playback_volume(self: &PhoneCall, level: i32, done: bool);
     }
 }
 
@@ -186,6 +204,9 @@ pub struct PhoneCallRust {
     call_audio: bool,
     call_mics: QString,
     call_mic: QString,
+    call_outputs: QString,
+    call_output: QString,
+    call_playback_volume: i32,
     /// The call's ID on the phone, for its commands.
     call: Option<(DeviceId, String)>,
     /// What the Calls page last showed, to skip JSON updates that changed nothing.
@@ -200,6 +221,9 @@ impl cxx_qt::Initialize for qobject::PhoneCall {
         self.as_mut().set_contacts(QString::from("[]"));
         self.as_mut().set_sims(QString::from("[]"));
         self.as_mut().set_call_mics(QString::from("[]"));
+        self.as_mut().set_call_outputs(QString::from("[]"));
+        self.as_mut().set_call_output(QString::from(&crate::call_audio::chosen_output().unwrap_or_default()));
+        self.as_mut().refresh_call_playback_volume();
         super::subscribe(self.qt_thread(), Changes::CALLS | Changes::CAPABILITIES, Self::refresh_state);
     }
 }
@@ -272,6 +296,7 @@ impl qobject::PhoneCall {
     }
 
     fn refresh_state(mut self: Pin<&mut Self>) {
+        self.as_mut().refresh_call_playback_volume();
         let preferred_device = super::parse_device(&self.rust().device);
         let active_call = calls::active_or_ringing(preferred_device);
         let call_device = active_call.as_ref().map(|(d, _, _)| *d).or(preferred_device);
@@ -378,7 +403,13 @@ impl qobject::PhoneCall {
     }
 
     pub fn volume(&self, up: bool) {
-        self.send(CallCommand::Volume(up));
+        if self.rust().call.as_ref().is_some_and(|(device, _)| crate::call_audio::playing_on_pc(*device)) {
+            let volume = crate::call_audio::volume();
+            let level = if up { volume.saturating_add(5).min(100) } else { volume.saturating_sub(5) };
+            crate::call_audio::set_volume(level, true);
+        } else {
+            self.send(CallCommand::Volume(up));
+        }
     }
 
     pub fn refresh_call_mics(mut self: Pin<&mut Self>) {
@@ -392,6 +423,31 @@ impl qobject::PhoneCall {
     pub fn choose_call_mic(self: Pin<&mut Self>, id: &QString) {
         crate::call_audio::set_mic(String::from(id));
         self.refresh_call_mics();
+    }
+
+    pub fn refresh_call_outputs(mut self: Pin<&mut Self>) {
+        let devices = crate::call_audio::outputs();
+        let list: Vec<_> =
+            devices.iter().map(|d| serde_json::json!({ "id": d.id, "name": d.name })).collect();
+        self.as_mut().set_call_outputs(QString::from(&serde_json::Value::from(list).to_string()));
+        self.set_call_output(QString::from(&crate::call_audio::chosen_output().unwrap_or_default()));
+    }
+
+    pub fn choose_call_output(self: Pin<&mut Self>, id: &QString) {
+        crate::call_audio::set_output(String::from(id));
+        self.set_call_output(QString::from(&crate::call_audio::chosen_output().unwrap_or_default()));
+    }
+
+    pub fn set_call_playback_volume(&self, level: i32, done: bool) {
+        crate::call_audio::set_volume(level.clamp(0, 100) as u8, done);
+    }
+
+    fn refresh_call_playback_volume(mut self: Pin<&mut Self>) {
+        let level = i32::from(crate::call_audio::volume());
+        if self.rust().call_playback_volume != level {
+            self.as_mut().rust_mut().call_playback_volume = level;
+            self.call_playback_volume_changed();
+        }
     }
 
     pub fn move_call_audio(&self, here: bool) {

@@ -4,9 +4,13 @@
 //! while the phone shows that its call sounds here. Windows only for now;
 //! Linux carries calls over Bluetooth (`linux::bt_hfp`).
 
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc, LazyLock, Mutex,
+    atomic::{AtomicU8, Ordering},
+};
 
 use nectarlink_core::{DeviceId, MicSink, MirrorAudioConfig};
+use tokio::sync::watch;
 
 use crate::{
     bridge::app::{describe, show_message},
@@ -52,6 +56,10 @@ fn state<T>(f: impl FnOnce(&mut State) -> T) -> T {
 
 pub fn phase() -> Phase {
     state(|s| s.phase)
+}
+
+pub fn playing_on_pc(device: DeviceId) -> bool {
+    phase() == Phase::Live(device)
 }
 
 /// Whether this PC can take `device`'s call in progress.
@@ -183,9 +191,58 @@ fn recorder(uplink: &Arc<nectarlink_core::MirrorStream>) -> Result<crate::win::a
 
 /// The microphone chosen in Settings, if any (kept when other settings save).
 static MIC: Mutex<Option<String>> = Mutex::new(None);
+static OUTPUT: LazyLock<watch::Sender<Option<String>>> = LazyLock::new(|| watch::channel(None).0);
+static PLAYBACK_VOLUME: AtomicU8 = AtomicU8::new(100);
 
 pub fn init(settings: &crate::settings::Settings) {
     *MIC.lock().unwrap_or_else(|e| e.into_inner()) = settings.call_mic.clone();
+    OUTPUT.send_replace(settings.call_output.clone());
+    PLAYBACK_VOLUME.store(settings.call_playback_volume.min(100), Ordering::Relaxed);
+}
+
+pub fn outputs() -> Vec<nectarlink_core::AudioOutputDevice> {
+    #[cfg(windows)]
+    {
+        crate::win::audio::output_devices()
+    }
+    #[cfg(not(windows))]
+    Vec::new()
+}
+
+pub fn chosen_output() -> Option<String> {
+    OUTPUT.borrow().clone()
+}
+
+/// Moves playback on the next call packet, keeping the call and its microphone open.
+pub fn set_output(id: String) {
+    let output = (!id.is_empty()).then_some(id);
+    let previous = OUTPUT.send_replace(output.clone());
+    if previous != output
+        && let Err(error) = crate::settings::Settings::update(&core_host::host().data_dir, |settings| {
+            settings.call_output = output;
+        })
+    {
+        tracing::warn!(%error, "can't save the call output");
+    }
+    core_host::host().hub.changed(Changes::CALLS);
+}
+
+pub fn volume() -> u8 {
+    PLAYBACK_VOLUME.load(Ordering::Relaxed)
+}
+
+/// Sets the PC's call playback level and saves the final change.
+pub fn set_volume(level: u8, done: bool) {
+    let level = level.min(100);
+    PLAYBACK_VOLUME.store(level, Ordering::Relaxed);
+    if done
+        && let Err(error) = crate::settings::Settings::update(&core_host::host().data_dir, |settings| {
+            settings.call_playback_volume = level;
+        })
+    {
+        tracing::warn!(%error, "can't save the call volume");
+    }
+    core_host::host().hub.changed(Changes::CALLS);
 }
 
 pub fn chosen_mic() -> Option<String> {
@@ -300,7 +357,9 @@ pub fn sink(peer: &DeviceId) -> Option<Arc<dyn MicSink>> {
 
 struct Sink {
     peer: DeviceId,
-    #[cfg(any(windows, target_os = "linux"))]
+    #[cfg(windows)]
+    player: Mutex<Option<crate::win::audio_out::RoutedPlayer>>,
+    #[cfg(target_os = "linux")]
     player: Mutex<Option<crate::win::audio_out::Player>>,
     #[cfg(not(any(windows, target_os = "linux")))]
     player: Mutex<Option<()>>,
@@ -308,10 +367,16 @@ struct Sink {
 
 impl MicSink for Sink {
     fn config(&self, config: MirrorAudioConfig) {
-        // Plays on the default output; on speakers the microphone hears
-        // the other party too (no echo cancelling), so headphones work best.
+        #[cfg(windows)]
+        let player = crate::win::audio_out::RoutedPlayer::start(
+            OUTPUT.subscribe(),
+            config.rate,
+            u16::from(config.channels),
+        );
+        #[cfg(target_os = "linux")]
+        let player = crate::win::audio_out::Player::start(config.rate, u16::from(config.channels));
         #[cfg(any(windows, target_os = "linux"))]
-        match crate::win::audio_out::Player::start(config.rate, u16::from(config.channels)) {
+        match player {
             Ok(player) => *self.player.lock().unwrap_or_else(|e| e.into_inner()) = Some(player),
             Err(e) => tracing::warn!(error = %e, "can't play the call"),
         }
@@ -321,7 +386,9 @@ impl MicSink for Sink {
 
     fn audio(&self, _time_us: u64, data: Vec<u8>) {
         #[cfg(any(windows, target_os = "linux"))]
-        if let Some(player) = self.player.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        if let Some(player) = self.player.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+            let mut data = data;
+            crate::phone_sound::scale(&mut data, volume());
             player.push(data);
         }
         #[cfg(not(any(windows, target_os = "linux")))]

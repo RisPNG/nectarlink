@@ -796,6 +796,11 @@ pub struct Settings {
     /// `None`: Windows' default communications microphone).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub call_mic: Option<String>,
+    /// The playback endpoint for calls routed to the PC (`None`: system default).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub call_output: Option<String>,
+    /// How loud routed calls play on the PC, in percent.
+    pub call_playback_volume: u8,
     /// Which phone camera lens to stream (`"back"` or `"front"`).
     #[serde(default = "default_webcam_camera", alias = "webcam_camera")]
     pub webcam_camera: String,
@@ -1074,6 +1079,8 @@ impl Default for Settings {
             phone_mic_output: None,
             phone_mic_gain: crate::phone_mic::DEFAULT_GAIN,
             call_mic: None,
+            call_output: None,
+            call_playback_volume: 100,
             timeline_retention_days: 90,
             continuity_photo_hotkey: "Ctrl+Alt+C".into(),
             continuity_scan_hotkey: "Ctrl+Alt+D".into(),
@@ -1148,6 +1155,7 @@ impl Settings {
             self.ui_scale = default_ui_scale();
         }
         self.webcam_camera = normalize_webcam_camera(&self.webcam_camera);
+        self.call_playback_volume = self.call_playback_volume.min(100);
         self.walkthrough_step = self.walkthrough_step.min(6);
         self.window_screen = self.window_screen.map(|s| s.trim().to_owned()).filter(|s| !s.is_empty());
         self.window_width = self.window_width.clamp(MIN_WINDOW_WIDTH, MAX_WINDOW_WIDTH);
@@ -1272,6 +1280,18 @@ impl Settings {
     pub fn save(&self, dir: &Path) -> std::io::Result<()> {
         let _guard = SAVE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         self.save_locked(dir)
+    }
+
+    /// Saves a Preferences snapshot, keeping call playback changes saved
+    /// independently since the snapshot was taken.
+    pub fn save_preferences(self, dir: &Path) -> std::io::Result<()> {
+        Self::update(dir, |current| {
+            *current = Self {
+                call_output: current.call_output.take(),
+                call_playback_volume: current.call_playback_volume,
+                ..self
+            };
+        })
     }
 
     /// Changes what's saved on disk, read and written under the save lock.
@@ -1463,6 +1483,8 @@ mod tests {
             phone_mic_output: Some("{0.0.0.00000000}.{cable}".into()),
             phone_mic_gain: 250,
             call_mic: Some("{0.0.1.00000000}.{headset}".into()),
+            call_output: Some("{0.0.0.00000000}.{speakers}".into()),
+            call_playback_volume: 72,
             timeline_retention_days: 30,
             continuity_photo_hotkey: "Ctrl+Alt+P".into(),
             continuity_scan_hotkey: "Ctrl+Alt+S".into(),
@@ -1531,14 +1553,35 @@ mod tests {
     #[test]
     fn missing_fields_take_defaults_and_corrupt_files_are_set_aside() {
         let dir = tempfile::tempdir().unwrap();
-        fs::write(dir.path().join(FILE_NAME), r#"{ "theme": "graphite" }"#).unwrap();
+        fs::write(dir.path().join(FILE_NAME), r#"{ "theme": "graphite", "phoneSoundVolume": 28 }"#).unwrap();
         let loaded = Settings::load(dir.path());
         assert_eq!(loaded.theme, Theme::Graphite);
         assert_eq!(loaded.seed, "wallpaper");
+        assert_eq!(loaded.phone_sound_volume, 28);
+        assert_eq!(loaded.call_playback_volume, 100);
+        assert_eq!(loaded.call_output, None);
 
         fs::write(dir.path().join(FILE_NAME), "{ not json").unwrap();
         assert_eq!(Settings::load(dir.path()), Settings::default());
         assert!(dir.path().join("desktop-settings.json.corrupt").exists());
+    }
+
+    #[test]
+    fn older_preferences_snapshots_keep_saved_call_playback_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut preferences = Settings::load(dir.path());
+        preferences.phone_sound_volume = 30;
+        Settings::update(dir.path(), |settings| {
+            settings.call_output = Some("headphones".into());
+            settings.call_playback_volume = 70;
+        })
+        .unwrap();
+
+        preferences.save_preferences(dir.path()).unwrap();
+        let saved = Settings::load(dir.path());
+        assert_eq!(saved.phone_sound_volume, 30);
+        assert_eq!(saved.call_output.as_deref(), Some("headphones"));
+        assert_eq!(saved.call_playback_volume, 70);
     }
 
     #[test]

@@ -116,7 +116,7 @@ pub fn apply_volume(data: &mut [u8]) {
     scale(data, crate::settings::phone_sound_volume());
 }
 
-fn scale(data: &mut [u8], level: u8) {
+pub(crate) fn scale(data: &mut [u8], level: u8) {
     if level >= 100 {
         return;
     }
